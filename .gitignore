@@ -1,0 +1,29 @@
+# ─── Android ───────────────────────────────────────────
+mobile/.gradle/
+mobile/build/
+mobile/app/build/
+mobile/local.properties
+mobile/.idea/
+mobile/**/*.iml
+mobile/captures/
+mobile/.externalNativeBuild/
+mobile/.cxx/
+
+# ─── Secrets ────────────────────────────────────────────
+local.properties
+*.env
+*.key
+
+# ─── IDEs ────────────────────────────────────────────────
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ─── Backend / Node (por si se agrega) ──────────────────
+backend/node_modules/
+backend/.env
+
+# ─── PDF y temporales ───────────────────────────────────
+*.pdf
+*.tmp
