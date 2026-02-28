@@ -20,7 +20,7 @@ local.properties
 .DS_Store
 Thumbs.db
 
-# ─── Backend / Node (por si se agrega) ──────────────────
+# ─── Backend / Node ──────────────────
 backend/node_modules/
 backend/.env
 
