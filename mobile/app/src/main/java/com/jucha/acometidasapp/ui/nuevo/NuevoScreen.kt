@@ -151,7 +151,8 @@ fun NuevoScreen(vm: NuevoViewModel = viewModel()) {
                 }
             }
 
-            // Dirección 
+            // Dirección
+            item {
                 FormCard {
                     CampoForm("DIRECCIÓN", vm.direccion, { vm.direccion = it }, Modifier.fillMaxWidth())
                 }

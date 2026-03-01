@@ -83,6 +83,11 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // PDF generation — PDFBox Android port
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
+        exclude(group = "org.bouncycastle")
+    }
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     implementation("androidx.compose.material:material-icons-extended")

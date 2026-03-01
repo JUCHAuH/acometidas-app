@@ -1,11 +1,13 @@
 package com.jucha.acometidasapp.ui.nuevo
 
+import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.jucha.acometidasapp.data.model.CreateFotoDto
 import com.jucha.acometidasapp.data.model.CreatePredioDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.remote.SupabaseClient
@@ -21,7 +23,7 @@ sealed class NuevoSaveState {
     data class Error(val message: String) : NuevoSaveState()
 }
 
-class NuevoViewModel : ViewModel() {
+class NuevoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = PredioRepository(
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
@@ -75,7 +77,24 @@ class NuevoViewModel : ViewModel() {
                     direccion       = direccion.ifBlank { null },
                     observaciones   = observaciones.ifBlank { null }
                 )
-            ).onSuccess {
+            ).onSuccess { predio ->
+                // Subir cada foto al Storage y registrarla en la tabla fotos
+                val ctx = getApplication<Application>()
+                listOf(
+                    fotoPredioUri    to "predio",
+                    fotoAcometidaUri to "acometida",
+                    fotoMedidorUri   to "medidor"
+                ).forEach { (uri, tipo) ->
+                    if (uri != null) {
+                        repository.uploadFoto(ctx, uri, predio.id, tipo)
+                            .onSuccess { url ->
+                                repository.createFoto(
+                                    CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
+                                )
+                            }
+                        // Si falla el upload, continuamos — el predio ya fue guardado
+                    }
+                }
                 limpiarFormulario()
                 _saveState.value = NuevoSaveState.Success
             }.onFailure { error ->

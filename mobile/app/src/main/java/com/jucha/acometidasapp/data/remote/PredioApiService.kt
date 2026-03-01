@@ -1,5 +1,6 @@
 package com.jucha.acometidasapp.data.remote
 
+import com.jucha.acometidasapp.data.model.CreateFotoDto
 import com.jucha.acometidasapp.data.model.CreatePredioDto
 import com.jucha.acometidasapp.data.model.FotoDto
 import com.jucha.acometidasapp.data.model.PredioDto
@@ -26,4 +27,8 @@ interface PredioApiService {
     @POST("predios")
     @Headers("Prefer: return=representation")
     suspend fun createPredio(@Body predio: CreatePredioDto): List<PredioDto>
+
+    @POST("fotos")
+    @Headers("Prefer: return=representation")
+    suspend fun createFoto(@Body foto: CreateFotoDto): List<FotoDto>
 }

@@ -22,7 +22,7 @@ object SupabaseClient {
         chain.proceed(request)
     }
 
-    private val client = OkHttpClient.Builder()
+    val httpClient: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(authInterceptor)
         .addInterceptor(logging)
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -32,7 +32,7 @@ object SupabaseClient {
 
     val retrofit: Retrofit = Retrofit.Builder()
         .baseUrl("${BuildConfig.SUPABASE_URL}/rest/v1/")
-        .client(client)
+        .client(httpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 }
