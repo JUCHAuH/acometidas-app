@@ -14,7 +14,10 @@ import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed class ExportarUiState {
@@ -38,6 +41,16 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow<ExportarUiState>(ExportarUiState.LoadingPredios)
     val uiState: StateFlow<ExportarUiState> = _uiState
 
+    private val _listaUri = MutableStateFlow<Uri?>(null)
+    val listaUri: StateFlow<Uri?> = _listaUri
+
+    private val _allPredios = MutableStateFlow<List<PredioDto>>(emptyList())
+    val busqueda = MutableStateFlow("")
+    val filtroDireccion = MutableStateFlow<String?>(null)
+    val direcciones: StateFlow<List<String>> = _allPredios
+        .map { list -> list.mapNotNull { it.direccion?.trim()?.ifBlank { null } }.distinct().sorted() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     var empresaContratista = ""
     var supervisorObra = ""
 
@@ -48,6 +61,7 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repository.getPredios()
                 .onSuccess { predios ->
+                    _allPredios.value = predios
                     _uiState.value = ExportarUiState.Ready(predios)
                 }
                 .onFailure { e ->
@@ -65,13 +79,16 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.value = state.copy(seleccionados = nuevaSeleccion)
     }
 
-    fun toggleTodos() {
+    fun toggleTodos(filtrados: List<PredioDto>) {
         val state = _uiState.value as? ExportarUiState.Ready ?: return
-        val todos = state.predios.map { it.id }.toSet()
-        _uiState.value = if (state.seleccionados.size == state.predios.size)
-            state.copy(seleccionados = emptySet())
-        else
-            state.copy(seleccionados = todos)
+        val idsVisibles = filtrados.map { it.id }.toSet()
+        val todosSeleccionados = idsVisibles.isNotEmpty() && idsVisibles.all { it in state.seleccionados }
+        _uiState.value = state.copy(
+            seleccionados = if (todosSeleccionados)
+                state.seleccionados - idsVisibles
+            else
+                state.seleccionados + idsVisibles
+        )
     }
 
     fun exportar() {
@@ -130,4 +147,24 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
     fun resetDone() {
         cargarPredios()
     }
+
+    fun exportarLista(predios: List<PredioDto>, barrio: String?) {
+        viewModelScope.launch {
+            try {
+                val archivo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    pdfService.generarListaPdf(predios, barrio)
+                }
+                val uri = FileProvider.getUriForFile(
+                    getApplication(),
+                    "${getApplication<Application>().packageName}.provider",
+                    archivo
+                )
+                _listaUri.value = uri
+            } catch (e: Exception) {
+                _uiState.value = ExportarUiState.Error(e.message ?: "Error al generar lista")
+            }
+        }
+    }
+
+    fun resetLista() { _listaUri.value = null }
 }

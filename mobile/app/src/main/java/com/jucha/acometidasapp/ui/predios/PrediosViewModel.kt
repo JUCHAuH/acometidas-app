@@ -9,7 +9,10 @@ import com.jucha.acometidasapp.data.remote.SupabaseClient
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed class PrediosUiState {
@@ -27,6 +30,13 @@ class PrediosViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<PrediosUiState>(PrediosUiState.Loading)
     val uiState: StateFlow<PrediosUiState> = _uiState
 
+    private val _predios = MutableStateFlow<List<PredioDto>>(emptyList())
+    val busqueda = MutableStateFlow("")
+    val filtroDireccion = MutableStateFlow<String?>(null)
+    val direcciones: StateFlow<List<String>> = _predios
+        .map { list -> list.mapNotNull { it.direccion?.trim()?.ifBlank { null } }.distinct().sorted() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         cargarPredios()
     }
@@ -36,6 +46,7 @@ class PrediosViewModel : ViewModel() {
         viewModelScope.launch {
             repository.getPredios()
                 .onSuccess { predios ->
+                    _predios.value = predios
                     _uiState.value = PrediosUiState.Success(predios)
                 }
                 .onFailure { error ->

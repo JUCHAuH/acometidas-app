@@ -1,14 +1,22 @@
 package com.jucha.acometidasapp.ui.exportar
 
 import android.content.Intent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.TableRows
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,17 +34,38 @@ import com.jucha.acometidasapp.data.model.PredioDto
 @Composable
 fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
     val uiState by vm.uiState.collectAsStateWithLifecycle()
+    val busqueda by vm.busqueda.collectAsStateWithLifecycle()
+    val filtroDireccion by vm.filtroDireccion.collectAsStateWithLifecycle()
+    val direcciones by vm.direcciones.collectAsStateWithLifecycle()
+    val listaUri by vm.listaUri.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(uiState) {
         if (uiState is ExportarUiState.Done) {
             val uri = (uiState as ExportarUiState.Done).pdfUri
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/pdf")
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val intent = Intent.createChooser(shareIntent, "Compartir PDF").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
             vm.resetDone()
+        }
+    }
+    LaunchedEffect(listaUri) {
+        listaUri?.let { uri ->
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val intent = Intent.createChooser(shareIntent, "Compartir Lista").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            vm.resetLista()
         }
     }
 
@@ -83,9 +112,84 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
             is ExportarUiState.Done -> { /* manejado por LaunchedEffect */ }
 
             is ExportarUiState.Ready -> {
+                val prediosFiltrados = remember(state.predios, busqueda, filtroDireccion) {
+                    state.predios.filter { p ->
+                        val q = busqueda.trim()
+                        val matchQ = q.isEmpty() ||
+                            p.usuario.contains(q, ignoreCase = true) ||
+                            p.numeroContrato.contains(q, ignoreCase = true) ||
+                            p.codigoPredio.contains(q, ignoreCase = true)
+                        val matchDir = filtroDireccion == null ||
+                            p.direccion?.trim() == filtroDireccion
+                        matchQ && matchDir
+                    }
+                }
                 Column(Modifier.fillMaxSize().padding(padding)) {
 
                     FirmasCard(vm = vm)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = busqueda,
+                            onValueChange = { vm.busqueda.value = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Buscar…") },
+                            leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
+                            trailingIcon = {
+                                if (busqueda.isNotEmpty()) {
+                                    IconButton(onClick = { vm.busqueda.value = "" }, modifier = Modifier.size(36.dp)) {
+                                        Icon(Icons.Outlined.Close, "Limpiar", Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large
+                        )
+                        if (direcciones.isNotEmpty()) {
+                            var expandedBarrio by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = expandedBarrio,
+                                onExpandedChange = { expandedBarrio = it },
+                                modifier = Modifier.width(148.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = filtroDireccion?.let {
+                                        if (it.length > 12) it.take(11) + "…" else it
+                                    } ?: "Barrio",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedBarrio) },
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                    shape = MaterialTheme.shapes.large,
+                                    singleLine = true
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = expandedBarrio,
+                                    onDismissRequest = { expandedBarrio = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Todos") },
+                                        onClick = { vm.filtroDireccion.value = null; expandedBarrio = false },
+                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                    )
+                                    direcciones.forEach { dir ->
+                                        DropdownMenuItem(
+                                            text = { Text(dir) },
+                                            onClick = { vm.filtroDireccion.value = dir; expandedBarrio = false },
+                                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     Row(
                         modifier = Modifier
@@ -99,10 +203,11 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.outline
                         )
-                        TextButton(onClick = { vm.toggleTodos() }) {
+                        TextButton(onClick = { vm.toggleTodos(prediosFiltrados) }) {
+                            val todosVisiblesSeleccionados = prediosFiltrados.isNotEmpty() &&
+                                prediosFiltrados.all { it.id in state.seleccionados }
                             Text(
-                                if (state.seleccionados.size == state.predios.size)
-                                    "Deseleccionar todo"
+                                if (todosVisiblesSeleccionados) "Deseleccionar todo"
                                 else "Seleccionar todo"
                             )
                         }
@@ -115,13 +220,18 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                             Text("No hay predios registrados",
                                 color = MaterialTheme.colorScheme.outline)
                         }
+                    } else if (prediosFiltrados.isEmpty()) {
+                        Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
+                            Text("Sin resultados para la búsqueda",
+                                color = MaterialTheme.colorScheme.outline)
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(state.predios, key = { it.id }) { predio ->
+                            items(prediosFiltrados, key = { it.id }) { predio ->
                                 PredioExportItem(
                                     predio = predio,
                                     seleccionado = predio.id in state.seleccionados,
@@ -134,7 +244,7 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                     Button(
                         onClick = { vm.exportar() },
                         enabled = state.seleccionados.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
                     ) {
                         Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -142,6 +252,15 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                             if (state.seleccionados.size == 1) "Exportar 1 predio"
                             else "Exportar ${state.seleccionados.size} predios"
                         )
+                    }
+                    OutlinedButton(
+                        onClick = { vm.exportarLista(prediosFiltrados, filtroDireccion) },
+                        enabled = prediosFiltrados.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    ) {
+                        Icon(Icons.Outlined.TableRows, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Exportar lista (${prediosFiltrados.size})")
                     }
                 }
             }
@@ -153,18 +272,55 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
 private fun FirmasCard(vm: ExportarViewModel) {
     var empresa    by remember { mutableStateOf(vm.empresaContratista) }
     var supervisor by remember { mutableStateOf(vm.supervisorObra) }
+    var expandida  by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .animateContentSize(),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expandida = !expandida }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Datos de firma", style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Outlined.Edit, null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Datos de firma",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold)
+                if (!expandida) {
+                    val resumen = listOfNotNull(
+                        empresa.ifBlank { null },
+                        supervisor.ifBlank { null }
+                    ).joinToString(" • ")
+                    Text(
+                        text = resumen.ifEmpty { "Opcional — toca para editar" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(
+                if (expandida) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (expandida) {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedTextField(
                     value = empresa,
                     onValueChange = { empresa = it; vm.empresaContratista = it },
@@ -194,7 +350,7 @@ private fun PredioExportItem(
 ) {
     Card(
         onClick = onToggle,
-        modifier = Modifier.fillMaxWidth().height(72.dp),
+        modifier = Modifier.fillMaxWidth().height(90.dp),
         elevation = CardDefaults.cardElevation(if (seleccionado) 4.dp else 1.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (seleccionado)
@@ -231,6 +387,15 @@ private fun PredioExportItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (!predio.direccion.isNullOrBlank()) {
+                    Text(
+                        text     = predio.direccion,
+                        style    = MaterialTheme.typography.bodySmall,
+                        color    = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

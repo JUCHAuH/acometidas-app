@@ -5,9 +5,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +34,9 @@ fun PrediosScreen(
     navController: NavController? = null
 ) {
     val uiState by vm.uiState.collectAsStateWithLifecycle()
+    val busqueda by vm.busqueda.collectAsStateWithLifecycle()
+    val filtroDireccion by vm.filtroDireccion.collectAsStateWithLifecycle()
+    val direcciones by vm.direcciones.collectAsStateWithLifecycle()
 
     // Recargar cada vez que la pantalla vuelve a primer plano (al regresar de Editar)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -75,30 +80,107 @@ fun PrediosScreen(
             }
 
             is PrediosUiState.Success -> {
-                if (state.predios.isEmpty()) {
-                    Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Outlined.Assignment, null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.outline)
-                            Spacer(Modifier.height(12.dp))
-                            Text("No hay predios registrados",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.outline)
+                val prediosFiltrados = remember(state.predios, busqueda, filtroDireccion) {
+                    state.predios.filter { p ->
+                        val q = busqueda.trim()
+                        val matchQ = q.isEmpty() ||
+                            p.usuario.contains(q, ignoreCase = true) ||
+                            p.numeroContrato.contains(q, ignoreCase = true) ||
+                            p.codigoPredio.contains(q, ignoreCase = true)
+                        val matchDir = filtroDireccion == null ||
+                            p.direccion?.trim() == filtroDireccion
+                        matchQ && matchDir
+                    }
+                }
+                Column(Modifier.fillMaxSize().padding(padding)) {
+                    OutlinedTextField(
+                        value = busqueda,
+                        onValueChange = { vm.busqueda.value = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        placeholder = { Text("Nombre, contrato o código…") },
+                        leadingIcon  = { Icon(Icons.Outlined.Search, null) },
+                        trailingIcon = {
+                            if (busqueda.isNotEmpty()) {
+                                IconButton(onClick = { vm.busqueda.value = "" }) {
+                                    Icon(Icons.Outlined.Close, "Limpiar")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.large
+                    )
+                    if (direcciones.isNotEmpty()) {
+                        var expandedBarrio by remember { mutableStateOf(false) }
+                        ExposedDropdownMenuBox(
+                            expanded = expandedBarrio,
+                            onExpandedChange = { expandedBarrio = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = 8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = filtroDireccion ?: "Todos los barrios",
+                                onValueChange = {},
+                                readOnly = true,
+                                modifier = Modifier.fillMaxWidth().menuAnchor(),
+                                label = { Text("Barrio") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedBarrio) },
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                shape = MaterialTheme.shapes.large
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedBarrio,
+                                onDismissRequest = { expandedBarrio = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Todos los barrios") },
+                                    onClick = { vm.filtroDireccion.value = null; expandedBarrio = false },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                                direcciones.forEach { dir ->
+                                    DropdownMenuItem(
+                                        text = { Text(dir) },
+                                        onClick = { vm.filtroDireccion.value = dir; expandedBarrio = false },
+                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                    )
+                                }
+                            }
                         }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(padding),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(state.predios, key = { it.id }) { predio ->
-                            PredioItem(
-                                predio     = predio,
-                                onEliminar = { vm.eliminarPredio(predio.id) },
-                                onEditar   = { navController?.navigate(Routes.editarPredio(predio.id)) }
-                            )
+                    if (state.predios.isEmpty()) {
+                        Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Outlined.Assignment, null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.outline)
+                                Spacer(Modifier.height(12.dp))
+                                Text("No hay predios registrados",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                    } else if (prediosFiltrados.isEmpty()) {
+                        Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
+                            Text("Sin resultados para la búsqueda",
+                                color = MaterialTheme.colorScheme.outline,
+                                style = MaterialTheme.typography.bodyLarge)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(prediosFiltrados, key = { it.id }) { predio ->
+                                PredioItem(
+                                    predio     = predio,
+                                    onEliminar = { vm.eliminarPredio(predio.id) },
+                                    onEditar   = { navController?.navigate(Routes.editarPredio(predio.id)) }
+                                )
+                            }
                         }
                     }
                 }

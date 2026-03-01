@@ -8,14 +8,19 @@ import com.jucha.acometidasapp.data.model.FotoDto
 import com.jucha.acometidasapp.data.model.PredioDto
 import com.tom_roush.harmony.awt.AWTColor
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream.AppendMode
+import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDTextField
 import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PdfGeneratorService(private val context: Context) {
 
@@ -228,6 +233,134 @@ class PdfGeneratorService(private val context: Context) {
         doc.save(outputFile)
         doc.close()
         return outputFile
+    }
+
+    // ─── Generador de lista tabular ───────────────────────────────────────────
+
+    fun generarListaPdf(
+        predios: List<PredioDto>,
+        filtroBarrio: String? = null
+    ): File {
+        val pageW = 595f; val pageH = 842f
+        val mL = 36f;    val mR = 36f
+        val mT = 42f;    val mB = 36f
+        val cW = pageW - mL - mR
+
+        val colW   = floatArrayOf(26f, 82f, 66f, cW - 26f - 82f - 66f - 110f, 110f)
+        val colKey = arrayOf("Nro", "C\u00f3digo", "Contrato", "Usuario", "Ubicaci\u00f3n")
+        val fnt  = PDType1Font.HELVETICA
+        val fntB = PDType1Font.HELVETICA_BOLD
+        val fSz  = 7.8f; val hSz = 8f; val tHdr = 20f; val rH = 15f
+
+        val cHdrBg  = AWTColor(30,  58, 138)
+        val cHdrTxt = AWTColor.WHITE
+        val cAlt    = AWTColor(237, 242, 255)
+        val cBorder = AWTColor(180, 185, 200)
+        val cTitle  = AWTColor(30,  58, 138)
+        val cSub    = AWTColor(110, 110, 120)
+        val cCell   = AWTColor(30,  30,  40)
+
+        val fecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
+        val doc   = PDDocument()
+
+        fun filled(cs: PDPageContentStream, x: Float, y: Float, w: Float, h: Float, c: AWTColor) {
+            cs.setNonStrokingColor(c); cs.addRect(x, y, w, h); cs.fill()
+        }
+        fun stroked(cs: PDPageContentStream, x: Float, y: Float, w: Float, h: Float, c: AWTColor) {
+            cs.setStrokingColor(c); cs.setLineWidth(0.4f); cs.addRect(x, y, w, h); cs.stroke()
+        }
+        fun txt(cs: PDPageContentStream, t: String, x: Float, y: Float,
+                f: PDType1Font, sz: Float, c: AWTColor) {
+            cs.setFont(f, sz); cs.setNonStrokingColor(c)
+            cs.beginText(); cs.newLineAtOffset(x, y); cs.showText(sanitize(t)); cs.endText()
+        }
+        fun fit(t: String, maxPt: Float): String {
+            var s = sanitize(t)
+            while (s.isNotEmpty() && fnt.getStringWidth(s) / 1000f * fSz > maxPt)
+                s = s.dropLast(1)
+            return if (s.length < sanitize(t).length && s.isNotEmpty()) s.dropLast(1) + "…" else s
+        }
+
+        lateinit var cs: PDPageContentStream
+        var pageNum = 0
+        var y = 0f
+
+        fun newPage() {
+            if (pageNum > 0) {
+                txt(cs, "Pág. $pageNum  ·  Generado por SEMAPA Acometidas App",
+                    mL, mB - 12f, fnt, 6.5f, cSub)
+                cs.close()
+            }
+            pageNum++
+            val pg = PDPage(PDRectangle(pageW, pageH))
+            doc.addPage(pg)
+            cs = PDPageContentStream(doc, pg, AppendMode.OVERWRITE, false)
+            y = pageH - mT
+        }
+
+        fun drawPageTitle() {
+            if (pageNum == 1) {
+                txt(cs, "SEMAPA - Lista de Acometidas", mL, y, fntB, 13f, cTitle)
+                y -= 13f
+                val sub = buildString {
+                    append("Exportado: $fecha")
+                    if (filtroBarrio != null) append("   \u00b7   Barrio: $filtroBarrio")
+                    append("   \u00b7   Total: ${predios.size} predios")
+                }
+                txt(cs, sub, mL, y, fnt, 7.5f, cSub)
+                y -= 5f
+                cs.setStrokingColor(cTitle); cs.setLineWidth(1.5f)
+                cs.moveTo(mL, y); cs.lineTo(pageW - mR, y); cs.stroke()
+            } else {
+                txt(cs, "SEMAPA - Lista de Acometidas (cont.)", mL, y, fntB, 10f, cTitle)
+                y -= 4f
+                cs.setStrokingColor(cTitle); cs.setLineWidth(1f)
+                cs.moveTo(mL, y); cs.lineTo(pageW - mR, y); cs.stroke()
+            }
+            y -= 8f
+        }
+
+        fun drawTableHeader() {
+            var x = mL
+            colW.forEachIndexed { i, w ->
+                filled(cs, x, y - tHdr, w, tHdr, cHdrBg)
+                txt(cs, colKey[i], x + 4f, y - tHdr + 6f, fntB, hSz, cHdrTxt)
+                x += w
+            }
+            stroked(cs, mL, y - tHdr, cW, tHdr, cHdrBg)
+            y -= tHdr
+        }
+
+        newPage()
+        drawPageTitle()
+        drawTableHeader()
+
+        predios.forEachIndexed { idx, p ->
+            if (y - rH < mB + rH) {
+                newPage(); drawPageTitle(); drawTableHeader()
+            }
+            val rowY  = y - rH
+            val rowBg = if (idx % 2 == 1) cAlt else AWTColor.WHITE
+            filled(cs, mL, rowY, cW, rH, rowBg)
+            stroked(cs, mL, rowY, cW, rH, cBorder)
+            val vals = arrayOf(
+                "${idx + 1}",
+                p.codigoPredio,
+                p.numeroContrato,
+                p.usuario,
+                p.direccion ?: ""
+            )
+            var x = mL
+            colW.forEachIndexed { col, w ->
+                txt(cs, fit(vals[col], w - 6f), x + 3f, rowY + 4.5f, fnt, fSz, cCell)
+                x += w
+            }
+            y = rowY
+        }
+
+        txt(cs, "Pág. $pageNum  ·  Generado por SEMAPA Acometidas App", mL, mB - 12f, fnt, 6.5f, cSub)
+        cs.close()
+        return guardarDocumento(doc, "lista_acometidas_${System.currentTimeMillis()}.pdf")
     }
 
   
