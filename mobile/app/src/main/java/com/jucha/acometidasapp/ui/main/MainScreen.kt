@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.jucha.acometidasapp.core.navigation.Routes
+import com.jucha.acometidasapp.ui.editar.EditarScreen
 import com.jucha.acometidasapp.ui.exportar.ExportarScreen
 import com.jucha.acometidasapp.ui.nuevo.NuevoScreen
 import com.jucha.acometidasapp.ui.predios.PrediosScreen
@@ -33,47 +34,58 @@ val bottomNavItems = listOf(
     BottomNavItem("Exportar", Icons.Outlined.PictureAsPdf, Routes.Tab.EXPORTAR)
 )
 
+// Rutas donde NO debe aparecer el BottomNav
+val rutasSinBottomNav = setOf("editar_predio/{predioId}")
+
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
+    val currentRoute = navBackStackEntry?.destination?.route
+    val mostrarBottomBar = currentRoute !in rutasSinBottomNav
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                bottomNavItems.forEach { item ->
-                    NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (mostrarBottomBar) {
+                NavigationBar {
+                    bottomNavItems.forEach { item ->
+                        NavigationBarItem(
+                            icon     = { Icon(item.icon, contentDescription = item.label) },
+                            label    = { Text(item.label) },
+                            selected = navBackStackEntry?.destination?.hierarchy
+                                ?.any { it.route == item.route } == true,
+                            onClick  = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState    = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
         NavHost(
-            navController = navController,
+            navController    = navController,
             startDestination = Routes.Tab.PREDIOS,
-            modifier = Modifier.padding(innerPadding)
+            modifier         = Modifier.padding(innerPadding)
         ) {
             composable(Routes.Tab.PREDIOS) {
-                PrediosScreen()
+                PrediosScreen(navController = navController)
             }
             composable(Routes.Tab.NUEVO) {
                 NuevoScreen()
             }
             composable(Routes.Tab.EXPORTAR) {
                 ExportarScreen()
+            }
+            composable(Routes.EDITAR_PREDIO) { backStackEntry ->
+                val predioId = backStackEntry.arguments?.getString("predioId") ?: ""
+                EditarScreen(predioId = predioId, navController = navController)
             }
         }
     }

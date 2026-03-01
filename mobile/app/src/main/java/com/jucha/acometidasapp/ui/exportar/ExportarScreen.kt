@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
-import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -16,24 +15,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.jucha.acometidasapp.core.utils.PdfCalibrationUtil
 import com.jucha.acometidasapp.data.model.PredioDto
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Abrir el PDF automáticamente cuando esté listo
     LaunchedEffect(uiState) {
         if (uiState is ExportarUiState.Done) {
             val uri = (uiState as ExportarUiState.Done).pdfUri
@@ -52,26 +45,6 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
             TopAppBar(
                 title = { Text("Exportar PDF") },
                 actions = {
-                    IconButton(onClick = {
-                        scope.launch {
-                            val file = withContext(Dispatchers.IO) {
-                                PdfCalibrationUtil(context).generarCuadricula()
-                            }
-                            val uri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.provider",
-                                file
-                            )
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "application/pdf")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        }
-                    }) {
-                        Icon(Icons.Outlined.GridOn, contentDescription = "Calibrar coordenadas")
-                    }
                     IconButton(onClick = { vm.cargarPredios() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
@@ -221,7 +194,7 @@ private fun PredioExportItem(
 ) {
     Card(
         onClick = onToggle,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(72.dp),
         elevation = CardDefaults.cardElevation(if (seleccionado) 4.dp else 1.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (seleccionado)
@@ -230,7 +203,9 @@ private fun PredioExportItem(
         )
     ) {
         Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -242,12 +217,19 @@ private fun PredioExportItem(
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(predio.usuario, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Cód: ${predio.codigoPredio}  •  Contrato: ${predio.numeroContrato}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    text     = predio.usuario,
+                    style    = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text     = "Cód: ${predio.codigoPredio}  •  Contrato: ${predio.numeroContrato}",
+                    style    = MaterialTheme.typography.bodySmall,
+                    color    = MaterialTheme.colorScheme.outline,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

@@ -1,8 +1,10 @@
 package com.jucha.acometidasapp.ui.predios
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jucha.acometidasapp.data.model.PredioDto
+import com.jucha.acometidasapp.data.model.UpdatePredioDto
 import com.jucha.acometidasapp.data.remote.SupabaseClient
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.repository.PredioRepository
@@ -41,6 +43,25 @@ class PrediosViewModel : ViewModel() {
                         error.message ?: "Error al cargar los predios"
                     )
                 }
+        }
+    }
+
+    fun eliminarPredio(id: String) {
+        viewModelScope.launch {
+            repository.deletePredio(id)
+                .onSuccess { cargarPredios() }
+                .onFailure { e ->
+                    Log.e("PrediosVM", "Error al eliminar: ${e.message}", e)
+                    _uiState.value = PrediosUiState.Error(e.message ?: "Error al eliminar el predio")
+                }
+        }
+    }
+
+    fun editarPredio(id: String, update: UpdatePredioDto) {
+        viewModelScope.launch {
+            repository.updatePredio(id, update)
+                .onSuccess { cargarPredios() }
+                .onFailure { /* opcional: exponer error */ }
         }
     }
 }

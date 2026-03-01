@@ -54,13 +54,16 @@ class PdfGeneratorService(private val context: Context) {
             tempFile
         }
         val merged = PDDocument()
+        val partsToClose = mutableListOf<PDDocument>()
         tempFiles.forEach { file ->
             val part = PDDocument.load(file)
+            partsToClose.add(part)
             merged.importPage(part.getPage(0))
-            part.close()
-            file.delete()
         }
-        return guardarDocumento(merged, "acometidas_batch_${System.currentTimeMillis()}.pdf")
+        val result = guardarDocumento(merged, "acometidas_batch_${System.currentTimeMillis()}.pdf")
+        partsToClose.forEach { it.close() }
+        tempFiles.forEach { it.delete() }
+        return result
     }
 
     private fun rellenarCampos(

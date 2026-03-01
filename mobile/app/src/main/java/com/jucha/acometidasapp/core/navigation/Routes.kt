@@ -10,4 +10,8 @@ object Routes {
         const val NUEVO    = "tab_nuevo"
         const val EXPORTAR = "tab_exportar"
     }
+
+    // Ruta de pantalla completa (fuera del BottomNav)
+    const val EDITAR_PREDIO = "editar_predio/{predioId}"
+    fun editarPredio(predioId: String) = "editar_predio/$predioId"
 }
