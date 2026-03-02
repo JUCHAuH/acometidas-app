@@ -14,20 +14,23 @@ object SupabaseClient {
 
     // Interceptor que agrega los headers requeridos por Supabase en cada request
     private val authInterceptor = okhttp3.Interceptor { chain ->
-        val request = chain.request().newBuilder()
+        val original = chain.request()
+        val builder = original.newBuilder()
             .addHeader("apikey", BuildConfig.SUPABASE_KEY)
             .addHeader("Authorization", "Bearer ${BuildConfig.SUPABASE_KEY}")
-            .addHeader("Content-Type", "application/json")
-            .build()
-        chain.proceed(request)
+        // Agregar Content-Type: application/json si no tiene uno ya definido
+        if (original.header("Content-Type") == null) {
+            builder.addHeader("Content-Type", "application/json")
+        }
+        chain.proceed(builder.build())
     }
 
     val httpClient: OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(authInterceptor)
         .addInterceptor(logging)
-        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
     val retrofit: Retrofit = Retrofit.Builder()

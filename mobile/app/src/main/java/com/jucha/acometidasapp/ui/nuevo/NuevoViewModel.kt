@@ -2,6 +2,7 @@ package com.jucha.acometidasapp.ui.nuevo
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -86,13 +87,21 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                     fotoMedidorUri   to "medidor"
                 ).forEach { (uri, tipo) ->
                     if (uri != null) {
+                        Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
                         repository.uploadFoto(ctx, uri, predio.id, tipo)
                             .onSuccess { url ->
+                                Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
                                 repository.createFoto(
                                     CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
-                                )
+                                ).onSuccess {
+                                    Log.d("NuevoVM", "createFoto OK tipo=$tipo")
+                                }.onFailure { e ->
+                                    Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+                                }
                             }
-                        // Si falla el upload, continuamos — el predio ya fue guardado
+                            .onFailure { e ->
+                                Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}", e)
+                            }
                     }
                 }
                 limpiarFormulario()

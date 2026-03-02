@@ -1,6 +1,8 @@
 package com.jucha.acometidasapp.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.jucha.acometidasapp.BuildConfig
@@ -66,22 +68,36 @@ class PredioRepository(
         tipo: String
     ): Result<String> = runCatching {
         withContext(Dispatchers.IO) {
-            val bytes = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+
+            val raw = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+            val scaled = if (bitmap.width > 1280 || bitmap.height > 1280) {
+                val ratio = minOf(1280f / bitmap.width, 1280f / bitmap.height)
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * ratio).toInt(),
+                    (bitmap.height * ratio).toInt(),
+                    true
+                )
+            } else bitmap
+            val bytes = java.io.ByteArrayOutputStream().also {
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, it)
+            }.toByteArray()
+            Log.d("Repository", "uploadFoto tipo=$tipo original=${raw.size/1024}KB comprimido=${bytes.size/1024}KB")
+
             val fileName = "${predioId}_${tipo}_${System.currentTimeMillis()}.jpg"
             val requestBody = bytes.toRequestBody("image/jpeg".toMediaType())
             val request = Request.Builder()
-                .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/fotos/$fileName")
+                .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/acometidas/$fileName")
                 .post(requestBody)
-                .addHeader("apikey", BuildConfig.SUPABASE_KEY)
-                .addHeader("Authorization", "Bearer ${BuildConfig.SUPABASE_KEY}")
-                .addHeader("Content-Type", "image/jpeg")
+                .header("Content-Type", "image/jpeg")
                 .build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    throw IOException("Upload falló ${response.code}: ${response.body?.string()}")
+                    throw IOException("Upload fallo ${response.code}: ${response.body?.string()}")
                 }
             }
-            "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/fotos/$fileName"
+            "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/acometidas/$fileName"
         }
     }
 }

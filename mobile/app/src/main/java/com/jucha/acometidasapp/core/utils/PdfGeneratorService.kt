@@ -214,16 +214,26 @@ class PdfGeneratorService(private val context: Context) {
     }
 
     private fun insertarFoto(doc: PDDocument, page: com.tom_roush.pdfbox.pdmodel.PDPage, fotos: List<FotoDto>, tipo: String, x: Float, y: Float, width: Float, height: Float) {
-        val foto = fotos.firstOrNull { it.tipo == tipo } ?: return
+        val foto = fotos.firstOrNull { it.tipo == tipo } ?: run {
+            Log.w("PdfGenerator", "No hay foto tipo '$tipo'"); return
+        }
         try {
-            val url = java.net.URL(foto.url)
-            val bitmap = BitmapFactory.decodeStream(url.openStream()) ?: return
+            Log.d("PdfGenerator", "Descargando foto tipo=$tipo url=${foto.url}")
+            val connection = java.net.URL(foto.url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 15000
+            connection.readTimeout    = 15000
+            connection.connect()
+            Log.d("PdfGenerator", "HTTP ${connection.responseCode} para foto $tipo")
+            val bitmap = BitmapFactory.decodeStream(connection.inputStream) ?: run {
+                Log.w("PdfGenerator", "BitmapFactory devolvio null para $tipo"); return
+            }
             val pdImage = JPEGFactory.createFromImage(doc, bitmap)
             val cs = PDPageContentStream(doc, page, AppendMode.APPEND, true, true)
             cs.drawImage(pdImage, x, y, width, height)
             cs.close()
-        } catch (e: IOException) {
-            Log.w("PdfGenerator", "No se pudo insertar foto '$tipo': ${e.message}")
+            Log.d("PdfGenerator", "Foto $tipo insertada correctamente")
+        } catch (e: Exception) {
+            Log.e("PdfGenerator", "Error insertando foto '$tipo': ${e.message}", e)
         }
     }
 
