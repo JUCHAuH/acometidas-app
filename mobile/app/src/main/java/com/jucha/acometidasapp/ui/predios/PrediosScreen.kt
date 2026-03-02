@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.jucha.acometidasapp.core.theme.AzulAgua
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,12 +52,22 @@ fun PrediosScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Predios") },
+                title = {
+                    Text(
+                        "Predios",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
                     IconButton(onClick = { vm.cargarPredios() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor     = AzulAgua,
+                    titleContentColor  = Color.White,
+                    actionIconContentColor = Color.White
+                )
             )
         }
     ) { padding ->
@@ -225,7 +236,10 @@ private fun PredioItem(
 
     Card(
         modifier  = Modifier.fillMaxWidth().height(100.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        colors    = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -248,7 +262,7 @@ private fun PredioItem(
                 Text(
                     text     = "Cód: ${predio.codigoPredio}",
                     style    = MaterialTheme.typography.bodySmall,
-                    color    = MaterialTheme.colorScheme.outline,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -256,7 +270,7 @@ private fun PredioItem(
                     Text(
                         text     = dir,
                         style    = MaterialTheme.typography.bodySmall,
-                        color    = MaterialTheme.colorScheme.outline,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

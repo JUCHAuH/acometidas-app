@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Color
+import com.jucha.acometidasapp.core.theme.AzulAgua
 import com.jucha.acometidasapp.data.model.PredioDto
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,12 +74,17 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Exportar PDF") },
+                title = { Text("Exportar PDF", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { vm.cargarPredios() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor        = AzulAgua,
+                    titleContentColor    = Color.White,
+                    actionIconContentColor = Color.White
+                )
             )
         }
     ) { padding ->
@@ -201,7 +208,7 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                         Text(
                             "${state.seleccionados.size} de ${state.predios.size} seleccionados",
                             style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.outline
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         TextButton(onClick = { vm.toggleTodos(prediosFiltrados) }) {
                             val todosVisiblesSeleccionados = prediosFiltrados.isNotEmpty() &&
@@ -218,12 +225,12 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                     if (state.predios.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
                             Text("No hay predios registrados",
-                                color = MaterialTheme.colorScheme.outline)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else if (prediosFiltrados.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
                             Text("Sin resultados para la búsqueda",
-                                color = MaterialTheme.colorScheme.outline)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         LazyColumn(
@@ -304,7 +311,7 @@ private fun FirmasCard(vm: ExportarViewModel) {
                     Text(
                         text = resumen.ifEmpty { "Opcional — toca para editar" },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -313,7 +320,7 @@ private fun FirmasCard(vm: ExportarViewModel) {
             Icon(
                 if (expandida) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         if (expandida) {
@@ -369,7 +376,7 @@ private fun PredioExportItem(
                               else Icons.Outlined.CheckBoxOutlineBlank,
                 contentDescription = null,
                 tint = if (seleccionado) MaterialTheme.colorScheme.primary
-                       else MaterialTheme.colorScheme.outline
+                       else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -383,7 +390,7 @@ private fun PredioExportItem(
                 Text(
                     text     = "Cód: ${predio.codigoPredio}  •  Contrato: ${predio.numeroContrato}",
                     style    = MaterialTheme.typography.bodySmall,
-                    color    = MaterialTheme.colorScheme.outline,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -391,7 +398,7 @@ private fun PredioExportItem(
                     Text(
                         text     = predio.direccion,
                         style    = MaterialTheme.typography.bodySmall,
-                        color    = MaterialTheme.colorScheme.outline,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

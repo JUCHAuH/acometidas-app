@@ -30,7 +30,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
     )
 
-    // ── Campos del formulario ────────────────────────────────────────────────
+    // Campos del formulario ────────────────────────────────────────────────
     var numeroParte      by mutableStateOf("")
     var numeroContrato   by mutableStateOf("")
     var codigoPredio     by mutableStateOf("")
@@ -43,6 +43,9 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     var fotoPredioUri     by mutableStateOf<Uri?>(null)
     var fotoAcometidaUri  by mutableStateOf<Uri?>(null)
     var fotoMedidorUri    by mutableStateOf<Uri?>(null)
+
+    // Estado del parte
+    var estado by mutableStateOf("pendiente")
 
     // Estado de guardado 
     private val _saveState = MutableStateFlow<NuevoSaveState>(NuevoSaveState.Idle)
@@ -76,7 +79,8 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                     usuario         = usuario,
                     telefonoUsuario = telefonoUsuario.ifBlank { null },
                     direccion       = direccion.ifBlank { null },
-                    observaciones   = observaciones.ifBlank { null }
+                    observaciones   = observaciones.ifBlank { null },
+                    estado          = estado
                 )
             ).onSuccess { predio ->
                 // Subir cada foto al Storage y registrarla en la tabla fotos
@@ -125,5 +129,6 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         fotoPredioUri    = null
         fotoAcometidaUri = null
         fotoMedidorUri   = null
+        estado           = "pendiente"
     }
 }

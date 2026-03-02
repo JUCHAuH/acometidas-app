@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import com.jucha.acometidasapp.core.theme.AzulAgua
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -125,7 +126,16 @@ fun NuevoScreen(vm: NuevoViewModel = viewModel()) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Nuevo Predio") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Nuevo Predio", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor        = AzulAgua,
+                    titleContentColor    = Color.White,
+                    actionIconContentColor = Color.White
+                )
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { if (saveState !is NuevoSaveState.Saving) vm.guardar() },
@@ -236,6 +246,47 @@ fun NuevoScreen(vm: NuevoViewModel = viewModel()) {
                         minLines = 3,
                         maxLines = 5
                     )
+                }
+            }
+
+            // Estado
+            item {
+                FormCard {
+                    Text(
+                        "ESTADO DEL PARTE",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    val opciones = listOf("pendiente", "en_proceso", "completo")
+                    val labels   = mapOf("pendiente" to "Pendiente", "en_proceso" to "En proceso", "completo" to "Completo")
+                    val colores  = mapOf(
+                        "pendiente"  to Color(0xFFF59E0B),
+                        "en_proceso" to Color(0xFF3B82F6),
+                        "completo"   to Color(0xFF22C55E)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        opciones.forEach { op ->
+                            val seleccionado = vm.estado == op
+                            val color = colores[op] ?: MaterialTheme.colorScheme.outline
+                            FilterChip(
+                                selected = seleccionado,
+                                onClick  = { vm.estado = op },
+                                label    = { Text(labels[op] ?: op) },
+                                colors   = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor    = color.copy(alpha = 0.15f),
+                                    selectedLabelColor        = color,
+                                    selectedLeadingIconColor  = color
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled  = true,
+                                    selected = seleccionado,
+                                    selectedBorderColor = color,
+                                    selectedBorderWidth = 1.5.dp
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
