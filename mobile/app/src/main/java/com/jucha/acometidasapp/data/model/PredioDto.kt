@@ -12,6 +12,7 @@ data class PredioDto(
     @SerializedName("direccion")        val direccion: String?,
     @SerializedName("observaciones")    val observaciones: String?,
     @SerializedName("estado")           val estado: String,
+    @SerializedName("proyecto_id")      val proyectoId: String?,
     @SerializedName("created_at")       val createdAt: String?,
     @SerializedName("updated_at")       val updatedAt: String?
 )

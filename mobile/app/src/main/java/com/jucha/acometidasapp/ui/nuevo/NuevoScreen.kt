@@ -49,9 +49,15 @@ private fun crearUriTemporal(context: Context): Uri {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NuevoScreen(vm: NuevoViewModel = viewModel()) {
+fun NuevoScreen(
+    proyectoId: String,
+    vm: NuevoViewModel = viewModel()
+) {
     val context = LocalContext.current
     val saveState by vm.saveState.collectAsStateWithLifecycle()
+
+    // Pasar el proyecto al ViewModel para que lo incluya al guardar
+    LaunchedEffect(proyectoId) { vm.proyectoId = proyectoId }
 
     var pendingUri  by remember { mutableStateOf<Uri?>(null) }
     var pendingTipo by remember { mutableStateOf("") }

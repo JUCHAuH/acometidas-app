@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.theme.AzulAgua
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,20 +27,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.jucha.acometidasapp.core.navigation.Routes
+import androidx.compose.material.icons.outlined.ArrowBack
 import com.jucha.acometidasapp.data.model.PredioDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrediosScreen(
-    vm: PrediosViewModel = viewModel(),
-    navController: NavController? = null
+    proyectoId:      String,
+    vm:              PrediosViewModel = viewModel(),
+    navController:   NavController? = null,
+    outerNavController: NavController? = null
 ) {
-    val uiState by vm.uiState.collectAsStateWithLifecycle()
+    val uiState  by vm.uiState.collectAsStateWithLifecycle()
     val busqueda by vm.busqueda.collectAsStateWithLifecycle()
-    val filtroDireccion by vm.filtroDireccion.collectAsStateWithLifecycle()
-    val direcciones by vm.direcciones.collectAsStateWithLifecycle()
 
-    // Recargar cada vez que la pantalla vuelve a primer plano (al regresar de Editar)
+    // Cargar predios del proyecto seleccionado
+    LaunchedEffect(proyectoId) { vm.setProyectoId(proyectoId) }
+
+    // Recargar al volver de Editar
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -53,10 +58,24 @@ fun PrediosScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Predios",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text("Predios", fontWeight = FontWeight.Bold)
+                        Text(
+                            ProyectoSesion.nombre,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        outerNavController?.navigate(Routes.PROYECTOS) {
+                            popUpTo(Routes.PROYECTOS) { inclusive = true }
+                        }
+                    }) {
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Volver",
+                            tint = Color.White)
+                    }
                 },
                 actions = {
                     IconButton(onClick = { vm.cargarPredios() }) {
@@ -91,16 +110,13 @@ fun PrediosScreen(
             }
 
             is PrediosUiState.Success -> {
-                val prediosFiltrados = remember(state.predios, busqueda, filtroDireccion) {
+                val prediosFiltrados = remember(state.predios, busqueda) {
                     state.predios.filter { p ->
                         val q = busqueda.trim()
-                        val matchQ = q.isEmpty() ||
+                        q.isEmpty() ||
                             p.usuario.contains(q, ignoreCase = true) ||
                             p.numeroContrato.contains(q, ignoreCase = true) ||
                             p.codigoPredio.contains(q, ignoreCase = true)
-                        val matchDir = filtroDireccion == null ||
-                            p.direccion?.trim() == filtroDireccion
-                        matchQ && matchDir
                     }
                 }
                 Column(Modifier.fillMaxSize().padding(padding)) {
@@ -122,45 +138,6 @@ fun PrediosScreen(
                         singleLine = true,
                         shape = MaterialTheme.shapes.large
                     )
-                    if (direcciones.isNotEmpty()) {
-                        var expandedBarrio by remember { mutableStateOf(false) }
-                        ExposedDropdownMenuBox(
-                            expanded = expandedBarrio,
-                            onExpandedChange = { expandedBarrio = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .padding(bottom = 8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = filtroDireccion ?: "Todos los barrios",
-                                onValueChange = {},
-                                readOnly = true,
-                                modifier = Modifier.fillMaxWidth().menuAnchor(),
-                                label = { Text("Barrio") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedBarrio) },
-                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                                shape = MaterialTheme.shapes.large
-                            )
-                            ExposedDropdownMenu(
-                                expanded = expandedBarrio,
-                                onDismissRequest = { expandedBarrio = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Todos los barrios") },
-                                    onClick = { vm.filtroDireccion.value = null; expandedBarrio = false },
-                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                                )
-                                direcciones.forEach { dir ->
-                                    DropdownMenuItem(
-                                        text = { Text(dir) },
-                                        onClick = { vm.filtroDireccion.value = dir; expandedBarrio = false },
-                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                                    )
-                                }
-                            }
-                        }
-                    }
                     if (state.predios.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {

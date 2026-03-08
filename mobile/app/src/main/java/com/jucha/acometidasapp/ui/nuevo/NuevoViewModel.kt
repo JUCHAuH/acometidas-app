@@ -47,6 +47,9 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     // Estado del parte
     var estado by mutableStateOf("pendiente")
 
+    // Proyecto activo
+    var proyectoId: String = ""
+
     // Estado de guardado 
     private val _saveState = MutableStateFlow<NuevoSaveState>(NuevoSaveState.Idle)
     val saveState: StateFlow<NuevoSaveState> = _saveState
@@ -80,7 +83,8 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                     telefonoUsuario = telefonoUsuario.ifBlank { null },
                     direccion       = direccion.ifBlank { null },
                     observaciones   = observaciones.ifBlank { null },
-                    estado          = estado
+                    estado          = estado,
+                    proyectoId      = proyectoId
                 )
             ).onSuccess { predio ->
                 // Subir cada foto al Storage y registrarla en la tabla fotos

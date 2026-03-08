@@ -31,7 +31,7 @@ fun SplashScreen(navController: NavController) {
     LaunchedEffect(Unit) {
         started = true
         delay(2400)
-        navController.navigate(Routes.MAIN) {
+        navController.navigate(Routes.PROYECTOS) {
             popUpTo(Routes.SPLASH) { inclusive = true }
         }
     }

@@ -1,8 +1,9 @@
 package com.jucha.acometidasapp.core.navigation
 
 object Routes {
-    const val SPLASH = "splash"
-    const val MAIN   = "main"
+    const val SPLASH     = "splash"
+    const val PROYECTOS  = "proyectos"
+    const val MAIN       = "main"
 
     // Tabs del BottomNav
     object Tab {

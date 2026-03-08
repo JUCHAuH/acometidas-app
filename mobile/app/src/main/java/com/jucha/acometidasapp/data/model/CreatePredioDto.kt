@@ -10,5 +10,6 @@ data class CreatePredioDto(
     @SerializedName("telefono_usuario") val telefonoUsuario: String?,
     @SerializedName("direccion")        val direccion: String?,
     @SerializedName("observaciones")    val observaciones: String?,
-    @SerializedName("estado")           val estado: String = "pendiente"
+    @SerializedName("estado")           val estado: String = "pendiente",
+    @SerializedName("proyecto_id")      val proyectoId: String
 )

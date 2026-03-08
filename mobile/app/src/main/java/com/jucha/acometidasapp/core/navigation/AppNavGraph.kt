@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.jucha.acometidasapp.ui.main.MainScreen
+import com.jucha.acometidasapp.ui.proyectos.ProyectosScreen
 import com.jucha.acometidasapp.ui.splash.SplashScreen
 
 @Composable
@@ -12,14 +13,17 @@ fun AppNavGraph() {
     val navController = rememberNavController()
 
     NavHost(
-        navController = navController,
+        navController    = navController,
         startDestination = Routes.SPLASH
     ) {
         composable(Routes.SPLASH) {
             SplashScreen(navController)
         }
+        composable(Routes.PROYECTOS) {
+            ProyectosScreen(navController)
+        }
         composable(Routes.MAIN) {
-            MainScreen()
+            MainScreen(navController = navController)
         }
     }
 }

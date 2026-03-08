@@ -22,6 +22,13 @@ interface PredioApiService {
         @Query("select") select: String = "*"
     ): List<PredioDto>
 
+    @GET("predios")
+    suspend fun getPrediosByProyecto(
+        @Query("proyecto_id") proyectoIdFilter: String,
+        @Query("order")       order: String = "created_at.desc",
+        @Query("select")      select: String = "*"
+    ): List<PredioDto>
+
     @GET("fotos")
     suspend fun getFotosByPredio(
         @Query("predio_id") predioIdFilter: String,

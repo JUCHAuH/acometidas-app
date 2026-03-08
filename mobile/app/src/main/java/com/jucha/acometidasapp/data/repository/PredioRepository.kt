@@ -30,6 +30,10 @@ class PredioRepository(
         api.getPredios()
     }
 
+    suspend fun getPrediosByProyecto(proyectoId: String): Result<List<PredioDto>> = runCatching {
+        api.getPrediosByProyecto(proyectoIdFilter = "eq.$proyectoId")
+    }
+
     suspend fun getFotosByPredio(predioId: String): Result<List<FotoDto>> = runCatching {
         api.getFotosByPredio(predioIdFilter = "eq.$predioId")
     }
@@ -55,6 +59,41 @@ class PredioRepository(
     suspend fun deleteFotosByPredioTipo(predioId: String, tipo: String): Result<Unit> = runCatching {
         val response = api.deleteFotosByPredioTipo(predioIdFilter = "eq.$predioId", tipoFilter = "eq.$tipo")
         if (!response.isSuccessful) throw Exception("Error al eliminar fotos: ${response.code()}")
+    }
+
+    /**
+     * Borra del Storage todos los archivos asociados a un predio.
+     * Usa el endpoint batch-delete de Supabase Storage.
+     * No lanza excepción si falla — la eliminación del predio en BD procede igual.
+     */
+    suspend fun deleteStorageFilesForPredio(predioId: String) {
+        withContext(Dispatchers.IO) {
+            val fotos = getFotosByPredio(predioId).getOrElse { return@withContext }
+            if (fotos.isEmpty()) return@withContext
+
+            val fileNames = fotos.map { it.url.substringAfterLast("/") }
+            val json = buildString {
+                append("{\"prefixes\":[")
+                fileNames.forEachIndexed { i, name ->
+                    if (i > 0) append(",")
+                    append("\"").append(name).append("\"")
+                }
+                append("]}") 
+            }
+            val requestBody = json.toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/delete/acometidas")
+                .post(requestBody)
+                .header("Content-Type", "application/json")
+                .build()
+            runCatching {
+                httpClient.newCall(request).execute().use {
+                    Log.d("Repository", "deleteStorageFiles predioId=$predioId status=${it.code}")
+                }
+            }.onFailure {
+                Log.e("Repository", "deleteStorageFiles falló para predioId=$predioId", it)
+            }
+        }
     }
 
     suspend fun updatePredio(id: String, update: UpdatePredioDto): Result<PredioDto> = runCatching {

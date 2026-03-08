@@ -14,10 +14,7 @@ import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed class ExportarUiState {
@@ -46,20 +43,22 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _allPredios = MutableStateFlow<List<PredioDto>>(emptyList())
     val busqueda = MutableStateFlow("")
-    val filtroDireccion = MutableStateFlow<String?>(null)
-    val direcciones: StateFlow<List<String>> = _allPredios
-        .map { list -> list.mapNotNull { it.direccion?.trim()?.ifBlank { null } }.distinct().sorted() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    var empresaContratista = ""
-    var supervisorObra = ""
+    private var proyectoId = ""
 
-    init { cargarPredios() }
+    fun setProyectoId(id: String) {
+        if (proyectoId == id) return
+        proyectoId = id
+        cargarPredios()
+    }
+
+    init { /* no cargar hasta tener proyectoId */ }
 
     fun cargarPredios() {
+        if (proyectoId.isEmpty()) return
         _uiState.value = ExportarUiState.LoadingPredios
         viewModelScope.launch {
-            repository.getPredios()
+            repository.getPrediosByProyecto(proyectoId)
                 .onSuccess { predios ->
                     _allPredios.value = predios
                     _uiState.value = ExportarUiState.Ready(predios)
@@ -118,15 +117,15 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
                         pdfService.generarPdfIndividual(
                             predio = prediosSeleccionados.first(),
                             fotos = fotosPorPredio[prediosSeleccionados.first().id] ?: emptyList(),
-                            empresaContratista = empresaContratista,
-                            supervisorObra = supervisorObra
+                            empresaContratista = "",
+                            supervisorObra = ""
                         )
                     } else {
                         pdfService.generarPdfBatch(
                             predios = prediosSeleccionados,
                             fotosPorPredio = fotosPorPredio,
-                            empresaContratista = empresaContratista,
-                            supervisorObra = supervisorObra
+                            empresaContratista = "",
+                            supervisorObra = ""
                         )
                     }
                 }

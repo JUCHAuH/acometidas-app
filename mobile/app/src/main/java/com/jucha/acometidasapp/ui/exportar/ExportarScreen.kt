@@ -1,8 +1,6 @@
 package com.jucha.acometidasapp.ui.exportar
 
 import android.content.Intent
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,9 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -34,13 +29,16 @@ import com.jucha.acometidasapp.data.model.PredioDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
-    val uiState by vm.uiState.collectAsStateWithLifecycle()
+fun ExportarScreen(
+    proyectoId: String,
+    vm: ExportarViewModel = viewModel()
+) {
+    val uiState  by vm.uiState.collectAsStateWithLifecycle()
     val busqueda by vm.busqueda.collectAsStateWithLifecycle()
-    val filtroDireccion by vm.filtroDireccion.collectAsStateWithLifecycle()
-    val direcciones by vm.direcciones.collectAsStateWithLifecycle()
     val listaUri by vm.listaUri.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val context  = LocalContext.current
+
+    LaunchedEffect(proyectoId) { vm.setProyectoId(proyectoId) }
     LaunchedEffect(uiState) {
         if (uiState is ExportarUiState.Done) {
             val uri = (uiState as ExportarUiState.Done).pdfUri
@@ -119,21 +117,16 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
             is ExportarUiState.Done -> { /* manejado por LaunchedEffect */ }
 
             is ExportarUiState.Ready -> {
-                val prediosFiltrados = remember(state.predios, busqueda, filtroDireccion) {
+                val prediosFiltrados = remember(state.predios, busqueda) {
                     state.predios.filter { p ->
                         val q = busqueda.trim()
-                        val matchQ = q.isEmpty() ||
+                        q.isEmpty() ||
                             p.usuario.contains(q, ignoreCase = true) ||
                             p.numeroContrato.contains(q, ignoreCase = true) ||
                             p.codigoPredio.contains(q, ignoreCase = true)
-                        val matchDir = filtroDireccion == null ||
-                            p.direccion?.trim() == filtroDireccion
-                        matchQ && matchDir
                     }
                 }
                 Column(Modifier.fillMaxSize().padding(padding)) {
-
-                    FirmasCard(vm = vm)
 
                     Row(
                         modifier = Modifier
@@ -145,7 +138,7 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                         OutlinedTextField(
                             value = busqueda,
                             onValueChange = { vm.busqueda.value = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             placeholder = { Text("Buscar…") },
                             leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
                             trailingIcon = {
@@ -158,44 +151,6 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                             singleLine = true,
                             shape = MaterialTheme.shapes.large
                         )
-                        if (direcciones.isNotEmpty()) {
-                            var expandedBarrio by remember { mutableStateOf(false) }
-                            ExposedDropdownMenuBox(
-                                expanded = expandedBarrio,
-                                onExpandedChange = { expandedBarrio = it },
-                                modifier = Modifier.width(148.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = filtroDireccion?.let {
-                                        if (it.length > 12) it.take(11) + "…" else it
-                                    } ?: "Barrio",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedBarrio) },
-                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                                    shape = MaterialTheme.shapes.large,
-                                    singleLine = true
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = expandedBarrio,
-                                    onDismissRequest = { expandedBarrio = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Todos") },
-                                        onClick = { vm.filtroDireccion.value = null; expandedBarrio = false },
-                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                                    )
-                                    direcciones.forEach { dir ->
-                                        DropdownMenuItem(
-                                            text = { Text(dir) },
-                                            onClick = { vm.filtroDireccion.value = dir; expandedBarrio = false },
-                                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     Row(
@@ -261,7 +216,7 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                         )
                     }
                     OutlinedButton(
-                        onClick = { vm.exportarLista(prediosFiltrados, filtroDireccion) },
+                        onClick = { vm.exportarLista(prediosFiltrados, null) },
                         enabled = prediosFiltrados.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                     ) {
@@ -270,80 +225,6 @@ fun ExportarScreen(vm: ExportarViewModel = viewModel()) {
                         Text("Exportar lista (${prediosFiltrados.size})")
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FirmasCard(vm: ExportarViewModel) {
-    var empresa    by remember { mutableStateOf(vm.empresaContratista) }
-    var supervisor by remember { mutableStateOf(vm.supervisorObra) }
-    var expandida  by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .animateContentSize(),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expandida = !expandida }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Outlined.Edit, null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Datos de firma",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold)
-                if (!expandida) {
-                    val resumen = listOfNotNull(
-                        empresa.ifBlank { null },
-                        supervisor.ifBlank { null }
-                    ).joinToString(" • ")
-                    Text(
-                        text = resumen.ifEmpty { "Opcional — toca para editar" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Icon(
-                if (expandida) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (expandida) {
-            Row(
-                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = empresa,
-                    onValueChange = { empresa = it; vm.empresaContratista = it },
-                    label = { Text("Empresa Contratista",
-                        style = MaterialTheme.typography.labelSmall) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = supervisor,
-                    onValueChange = { supervisor = it; vm.supervisorObra = it },
-                    label = { Text("Supervisor de Obra",
-                        style = MaterialTheme.typography.labelSmall) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }
