@@ -2,12 +2,15 @@ package com.jucha.acometidasapp.ui.proyectos
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jucha.acometidasapp.core.navigation.SesionUsuario
 import com.jucha.acometidasapp.data.model.ProyectoDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.remote.ProyectoApiService
 import com.jucha.acometidasapp.data.remote.SupabaseClient
+import com.jucha.acometidasapp.data.remote.UsuarioApiService
 import com.jucha.acometidasapp.data.repository.PredioRepository
 import com.jucha.acometidasapp.data.repository.ProyectoRepository
+import com.jucha.acometidasapp.data.repository.UsuarioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -26,6 +29,9 @@ class ProyectosViewModel : ViewModel() {
     private val predioRepository = PredioRepository(
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
     )
+    private val usuarioRepository = UsuarioRepository(
+        api = SupabaseClient.retrofit.create(UsuarioApiService::class.java)
+    )
 
     private val _uiState = MutableStateFlow<ProyectosUiState>(ProyectosUiState.Loading)
     val uiState: StateFlow<ProyectosUiState> = _uiState
@@ -35,9 +41,26 @@ class ProyectosViewModel : ViewModel() {
     fun cargarProyectos() {
         _uiState.value = ProyectosUiState.Loading
         viewModelScope.launch {
-            repository.getProyectos()
-                .onSuccess { _uiState.value = ProyectosUiState.Success(it) }
-                .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al cargar proyectos") }
+            if (SesionUsuario.isAdmin) {
+                // Admin sees all projects
+                repository.getProyectos()
+                    .onSuccess { _uiState.value = ProyectosUiState.Success(it) }
+                    .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al cargar proyectos") }
+            } else {
+                // Encargado sees only assigned projects
+                val asignados = usuarioRepository.getProyectosDeUsuario(SesionUsuario.id)
+                    .getOrDefault(emptyList())
+                if (asignados.isEmpty()) {
+                    _uiState.value = ProyectosUiState.Success(emptyList())
+                    return@launch
+                }
+                repository.getProyectos()
+                    .onSuccess { todos ->
+                        val filtrados = todos.filter { it.id in asignados }
+                        _uiState.value = ProyectosUiState.Success(filtrados)
+                    }
+                    .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al cargar proyectos") }
+            }
         }
     }
 

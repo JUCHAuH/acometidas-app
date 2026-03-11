@@ -19,6 +19,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.navigation.Routes
+import com.jucha.acometidasapp.core.navigation.SesionUsuario
 import com.jucha.acometidasapp.ui.editar.EditarScreen
 import com.jucha.acometidasapp.ui.exportar.ExportarScreen
 import com.jucha.acometidasapp.ui.nuevo.NuevoScreen
@@ -31,7 +32,7 @@ data class BottomNavItem(
     val route: String
 )
 
-val bottomNavItems = listOf(
+val allBottomNavItems = listOf(
     BottomNavItem("Predios",  Icons.Outlined.Home,         Routes.Tab.PREDIOS),
     BottomNavItem("Nuevo",    Icons.Outlined.Add,          Routes.Tab.NUEVO),
     BottomNavItem("Exportar", Icons.Outlined.PictureAsPdf, Routes.Tab.EXPORTAR)
@@ -47,6 +48,9 @@ fun MainScreen(navController: NavController) {
     val navBackStackEntry by innerNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val mostrarBottomBar = currentRoute !in rutasSinBottomNav
+
+    val bottomNavItems = if (SesionUsuario.isAdmin) allBottomNavItems
+                         else allBottomNavItems.filter { it.route != Routes.Tab.EXPORTAR }
 
     val nuevoVm: NuevoViewModel = viewModel()
     var pendingRoute by remember { mutableStateOf<String?>(null) }

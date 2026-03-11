@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.navigation.Routes
+import com.jucha.acometidasapp.core.navigation.SesionUsuario
 import com.jucha.acometidasapp.core.theme.AzulAgua
 import com.jucha.acometidasapp.data.model.ProyectoDto
 
@@ -30,13 +33,37 @@ fun ProyectosScreen(
     vm: ProyectosViewModel = viewModel()
 ) {
     val uiState by vm.uiState.collectAsStateWithLifecycle()
+    val isAdmin = SesionUsuario.isAdmin
     var mostrarDialogoCrear by remember { mutableStateOf(false) }
     var nombreNuevo         by remember { mutableStateOf("") }
     var tipoNuevo           by remember { mutableStateOf("agua_potable") }
     var proyectoAEliminar   by remember { mutableStateOf<ProyectoDto?>(null) }
+    var mostrarLogout       by remember { mutableStateOf(false) }
 
-    // Crear proyecto
-    if (mostrarDialogoCrear) {
+    // Logout confirmation
+    if (mostrarLogout) {
+        AlertDialog(
+            onDismissRequest = { mostrarLogout = false },
+            icon  = { Icon(Icons.Outlined.Logout, null) },
+            title = { Text("Cerrar sesión") },
+            text  = { Text("¿Querés cerrar sesión?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    SesionUsuario.clear()
+                    mostrarLogout = false
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }) { Text("Salir") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarLogout = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Crear proyecto (solo admin)
+    if (mostrarDialogoCrear && isAdmin) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable" },
             title = { Text("Nuevo proyecto") },
@@ -92,8 +119,8 @@ fun ProyectosScreen(
         )
     }
 
-    // Confirmar eliminación
-    proyectoAEliminar?.let { proy ->
+    // Confirmar eliminación (solo admin)
+    if (isAdmin) proyectoAEliminar?.let { proy ->
         AlertDialog(
             onDismissRequest = { proyectoAEliminar = null },
             icon  = { Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error) },
@@ -120,15 +147,23 @@ fun ProyectosScreen(
                     Column {
                         Text("AquaDocs", fontWeight = FontWeight.Bold)
                         Text(
-                            "Seleccioná un proyecto",
+                            "${SesionUsuario.nombre} · ${if (isAdmin) "Admin" else "Encargado"}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.8f)
                         )
                     }
                 },
                 actions = {
+                    if (isAdmin) {
+                        IconButton(onClick = { navController.navigate(Routes.USUARIOS) }) {
+                            Icon(Icons.Outlined.People, contentDescription = "Usuarios")
+                        }
+                    }
                     IconButton(onClick = { vm.cargarProyectos() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
+                    }
+                    IconButton(onClick = { mostrarLogout = true }) {
+                        Icon(Icons.Outlined.Logout, contentDescription = "Cerrar sesión")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -139,12 +174,14 @@ fun ProyectosScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick           = { mostrarDialogoCrear = true },
-                containerColor    = AzulAgua,
-                contentColor      = Color.White
-            ) {
-                Icon(Icons.Outlined.Add, contentDescription = "Nuevo proyecto")
+            if (isAdmin) {
+                FloatingActionButton(
+                    onClick           = { mostrarDialogoCrear = true },
+                    containerColor    = AzulAgua,
+                    contentColor      = Color.White
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = "Nuevo proyecto")
+                }
             }
         }
     ) { padding ->
@@ -184,7 +221,8 @@ fun ProyectosScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Tocá + para crear uno",
+                                if (isAdmin) "Tocá + para crear uno"
+                                else "No tenés proyectos asignados",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -199,6 +237,7 @@ fun ProyectosScreen(
                         items(state.proyectos, key = { it.id }) { proyecto ->
                             ProyectoItem(
                                 proyecto      = proyecto,
+                                showDelete    = isAdmin,
                                 onSeleccionar = {
                                     ProyectoSesion.id     = proyecto.id
                                     ProyectoSesion.nombre = proyecto.nombre
@@ -219,6 +258,7 @@ fun ProyectosScreen(
 @Composable
 private fun ProyectoItem(
     proyecto:      ProyectoDto,
+    showDelete:    Boolean,
     onSeleccionar: () -> Unit,
     onEliminar:    () -> Unit
 ) {
@@ -252,15 +292,17 @@ private fun ProyectoItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(
-                onClick  = onEliminar,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    Icons.Outlined.Delete, "Eliminar",
-                    modifier = Modifier.size(18.dp),
-                    tint     = MaterialTheme.colorScheme.error
-                )
+            if (showDelete) {
+                IconButton(
+                    onClick  = onEliminar,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete, "Eliminar",
+                        modifier = Modifier.size(18.dp),
+                        tint     = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
