@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import com.jucha.acometidasapp.core.theme.AzulAgua
+import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -193,7 +194,10 @@ fun EditarScreen(
             item {
                 FormCard {
                     Text(
-                        "PARTE DE ACOMETIDA A RED DE AGUA POTABLE",
+                        if (ProyectoSesion.tipo == "alcantarillado")
+                            "PARTE DE ACOMETIDA A RED DE ALCANTARILLADO"
+                        else
+                            "PARTE DE ACOMETIDA A RED DE AGUA POTABLE",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -256,7 +260,10 @@ fun EditarScreen(
                         FotoBoxEditar(
                             uriNueva  = vm.fotoMedidorUriNueva,
                             urlActual = vm.fotoMedidorUrl,
-                            label     = "MEDIDOR INSTALADO",
+                            label     = if (ProyectoSesion.tipo == "alcantarillado")
+                                            "ACOMETIDA DE ALCANTARILLADO"
+                                        else
+                                            "MEDIDOR INSTALADO",
                             height    = 180.dp,
                             onClick   = { abrirCamara("medidor") },
                             modifier  = Modifier.weight(1f)

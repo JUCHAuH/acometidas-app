@@ -10,8 +10,8 @@ class ProyectoRepository(private val api: ProyectoApiService) {
         api.getProyectos()
     }
 
-    suspend fun createProyecto(nombre: String): Result<ProyectoDto> = runCatching {
-        api.createProyecto(CreateProyectoDto(nombre)).first()
+    suspend fun createProyecto(nombre: String, tipo: String): Result<ProyectoDto> = runCatching {
+        api.createProyecto(CreateProyectoDto(nombre, tipo)).first()
     }
 
     suspend fun deleteProyecto(id: String): Result<Unit> = runCatching {

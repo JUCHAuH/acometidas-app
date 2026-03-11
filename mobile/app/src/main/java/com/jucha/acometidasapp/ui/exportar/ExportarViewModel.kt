@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jucha.acometidasapp.core.utils.PdfGeneratorService
+import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.data.model.FotoDto
 import com.jucha.acometidasapp.data.model.PredioDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
@@ -118,14 +119,16 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
                             predio = prediosSeleccionados.first(),
                             fotos = fotosPorPredio[prediosSeleccionados.first().id] ?: emptyList(),
                             empresaContratista = "",
-                            supervisorObra = ""
+                            supervisorObra = "",
+                            tipoProyecto = ProyectoSesion.tipo
                         )
                     } else {
                         pdfService.generarPdfBatch(
                             predios = prediosSeleccionados,
                             fotosPorPredio = fotosPorPredio,
                             empresaContratista = "",
-                            supervisorObra = ""
+                            supervisorObra = "",
+                            tipoProyecto = ProyectoSesion.tipo
                         )
                     }
                 }

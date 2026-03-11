@@ -32,35 +32,60 @@ fun ProyectosScreen(
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     var mostrarDialogoCrear by remember { mutableStateOf(false) }
     var nombreNuevo         by remember { mutableStateOf("") }
+    var tipoNuevo           by remember { mutableStateOf("agua_potable") }
     var proyectoAEliminar   by remember { mutableStateOf<ProyectoDto?>(null) }
 
     // Crear proyecto
     if (mostrarDialogoCrear) {
         AlertDialog(
-            onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = "" },
+            onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable" },
             title = { Text("Nuevo proyecto") },
             text = {
-                OutlinedTextField(
-                    value         = nombreNuevo,
-                    onValueChange = { nombreNuevo = it },
-                    label         = { Text("Nombre del proyecto") },
-                    singleLine    = true,
-                    modifier      = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value         = nombreNuevo,
+                        onValueChange = { nombreNuevo = it },
+                        label         = { Text("Nombre del proyecto") },
+                        singleLine    = true,
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+                    Text("Tipo de conexión", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = tipoNuevo == "agua_potable",
+                            onClick  = { tipoNuevo = "agua_potable" },
+                            label    = { Text("Agua Potable") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AzulAgua,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                        FilterChip(
+                            selected = tipoNuevo == "alcantarillado",
+                            onClick  = { tipoNuevo = "alcantarillado" },
+                            label    = { Text("Alcantarillado") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AzulAgua,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                    }
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (nombreNuevo.isNotBlank()) {
-                            vm.crearProyecto(nombreNuevo)
+                            vm.crearProyecto(nombreNuevo, tipoNuevo)
                             nombreNuevo = ""
+                            tipoNuevo = "agua_potable"
                             mostrarDialogoCrear = false
                         }
                     }
                 ) { Text("Crear") }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoCrear = false; nombreNuevo = "" }) {
+                TextButton(onClick = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable" }) {
                     Text("Cancelar")
                 }
             }
@@ -177,6 +202,7 @@ fun ProyectosScreen(
                                 onSeleccionar = {
                                     ProyectoSesion.id     = proyecto.id
                                     ProyectoSesion.nombre = proyecto.nombre
+                                    ProyectoSesion.tipo   = proyecto.tipo
                                     navController.navigate(Routes.MAIN)
                                 },
                                 onEliminar = { proyectoAEliminar = proyecto }
@@ -214,12 +240,18 @@ private fun ProyectoItem(
                 modifier = Modifier.size(26.dp)
             )
             Spacer(Modifier.width(14.dp))
-            Text(
-                text       = proyecto.nombre,
-                style      = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier   = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text       = proyecto.nombre,
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text  = if (proyecto.tipo == "alcantarillado") "Alcantarillado" else "Agua Potable",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             IconButton(
                 onClick  = onEliminar,
                 modifier = Modifier.size(36.dp)

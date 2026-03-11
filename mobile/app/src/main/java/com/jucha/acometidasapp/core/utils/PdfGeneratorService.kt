@@ -30,11 +30,14 @@ class PdfGeneratorService(private val context: Context) {
         empresaContratista: String = "",
         supervisorObra: String = "",
         fechaEmpresa: String = "",
-        fechaSupervisor: String = ""
+        fechaSupervisor: String = "",
+        tipoProyecto: String = "agua_potable"
     ): File {
-        val stream = context.assets.open("plantilla_acometida.pdf")
+        val plantilla = if (tipoProyecto == "alcantarillado")
+            "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
+        val stream = context.assets.open(plantilla)
         val doc = PDDocument.load(stream)
-        rellenarCampos(doc, predio, fotos, empresaContratista, supervisorObra, fechaEmpresa, fechaSupervisor)
+        rellenarCampos(doc, predio, fotos, empresaContratista, supervisorObra, fechaEmpresa, fechaSupervisor, tipoProyecto)
         return guardarDocumento(doc, "acometida_${predio.codigoPredio}.pdf")
     }
 
@@ -42,16 +45,20 @@ class PdfGeneratorService(private val context: Context) {
         predios: List<PredioDto>,
         fotosPorPredio: Map<String, List<FotoDto>>,
         empresaContratista: String = "",
-        supervisorObra: String = ""
+        supervisorObra: String = "",
+        tipoProyecto: String = "agua_potable"
     ): File {
+        val plantilla = if (tipoProyecto == "alcantarillado")
+            "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
         val tempFiles = predios.map { predio ->
-            val stream = context.assets.open("plantilla_acometida.pdf")
+            val stream = context.assets.open(plantilla)
             val doc = PDDocument.load(stream)
             rellenarCampos(
                 doc, predio,
                 fotos = fotosPorPredio[predio.id] ?: emptyList(),
                 empresaContratista = empresaContratista,
-                supervisorObra = supervisorObra
+                supervisorObra = supervisorObra,
+                tipoProyecto = tipoProyecto
             )
             val tempFile = File(context.cacheDir, "temp_${predio.id}.pdf")
             doc.save(tempFile)
@@ -78,7 +85,8 @@ class PdfGeneratorService(private val context: Context) {
         empresaContratista: String = "",
         supervisorObra: String = "",
         fechaEmpresa: String = "",
-        fechaSupervisor: String = ""
+        fechaSupervisor: String = "",
+        tipoProyecto: String = "agua_potable"
     ) {
         val acroForm = doc.documentCatalog.acroForm
         if (acroForm == null) {
@@ -134,7 +142,8 @@ class PdfGeneratorService(private val context: Context) {
         }
         val r1 = readRect("foto_predio",    PdfCoords.FOTO1_X, PdfCoords.FOTO1_Y, PdfCoords.FOTO1_WIDTH, PdfCoords.FOTO1_HEIGHT)
         val r2 = readRect("foto_acometida", PdfCoords.FOTO2_X, PdfCoords.FOTO2_Y, PdfCoords.FOTO2_WIDTH, PdfCoords.FOTO2_HEIGHT)
-        val r3 = readRect("foto_medidor",   PdfCoords.FOTO3_X, PdfCoords.FOTO3_Y, PdfCoords.FOTO3_WIDTH, PdfCoords.FOTO3_HEIGHT)
+        val foto3Campo = if (tipoProyecto == "alcantarillado") "foto_alcantarillado" else "foto_medidor"
+        val r3 = readRect(foto3Campo,       PdfCoords.FOTO3_X, PdfCoords.FOTO3_Y, PdfCoords.FOTO3_WIDTH, PdfCoords.FOTO3_HEIGHT)
 
         // Eliminar todos los widgets de la pagina 
         val page = doc.getPage(0)

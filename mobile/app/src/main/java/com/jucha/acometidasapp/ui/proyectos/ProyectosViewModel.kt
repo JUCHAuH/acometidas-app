@@ -41,9 +41,9 @@ class ProyectosViewModel : ViewModel() {
         }
     }
 
-    fun crearProyecto(nombre: String) {
+    fun crearProyecto(nombre: String, tipo: String) {
         viewModelScope.launch {
-            repository.createProyecto(nombre.trim())
+            repository.createProyecto(nombre.trim(), tipo)
                 .onSuccess { cargarProyectos() }
                 .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al crear proyecto") }
         }
