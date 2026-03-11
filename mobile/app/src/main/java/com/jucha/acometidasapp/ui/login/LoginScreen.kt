@@ -97,10 +97,11 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "AquaDocs",
+                "Partes de Instalación · Camacho",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(6.dp))
             Text(
@@ -213,7 +214,7 @@ fun LoginScreen(
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "SEMAPA · Acometidas App",
+                "SEMAPA · AquaDocs",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.5f)
             )

@@ -29,6 +29,8 @@ sealed class ExportarUiState {
     data class Error(val message: String) : ExportarUiState()
 }
 
+data class PngExportResult(val uri: Uri, val mimeType: String)
+
 class ExportarViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = PredioRepository(
@@ -41,6 +43,9 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _listaUri = MutableStateFlow<Uri?>(null)
     val listaUri: StateFlow<Uri?> = _listaUri
+
+    private val _pngResult = MutableStateFlow<PngExportResult?>(null)
+    val pngResult: StateFlow<PngExportResult?> = _pngResult
 
     private val _allPredios = MutableStateFlow<List<PredioDto>>(emptyList())
     val busqueda = MutableStateFlow("")
@@ -128,7 +133,8 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
                             fotosPorPredio = fotosPorPredio,
                             empresaContratista = "",
                             supervisorObra = "",
-                            tipoProyecto = ProyectoSesion.tipo
+                            tipoProyecto = ProyectoSesion.tipo,
+                            proyectoNombre = ProyectoSesion.nombre
                         )
                     }
                 }
@@ -149,6 +155,55 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
     fun resetDone() {
         cargarPredios()
     }
+
+    fun exportarPng() {
+        val state = _uiState.value as? ExportarUiState.Ready ?: return
+        if (state.seleccionados.isEmpty()) return
+        val prediosSeleccionados = state.predios.filter { it.id in state.seleccionados }
+        _uiState.value = ExportarUiState.Generating
+        viewModelScope.launch {
+            try {
+                val fotosPorPredio: Map<String, List<FotoDto>> = prediosSeleccionados
+                    .map { predio ->
+                        async {
+                            val fotos = repository.getFotosByPredio(predio.id)
+                                .getOrDefault(emptyList())
+                            predio.id to fotos
+                        }
+                    }
+                    .awaitAll()
+                    .toMap()
+                val esSolo = prediosSeleccionados.size == 1
+                val archivo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    if (esSolo) {
+                        pdfService.generarPngIndividual(
+                            predio = prediosSeleccionados.first(),
+                            fotos = fotosPorPredio[prediosSeleccionados.first().id] ?: emptyList(),
+                            tipoProyecto = ProyectoSesion.tipo
+                        )
+                    } else {
+                        pdfService.generarPngBatch(
+                            predios = prediosSeleccionados,
+                            fotosPorPredio = fotosPorPredio,
+                            tipoProyecto = ProyectoSesion.tipo,
+                            proyectoNombre = ProyectoSesion.nombre
+                        )
+                    }
+                }
+                val uri = FileProvider.getUriForFile(
+                    getApplication(),
+                    "${getApplication<Application>().packageName}.provider",
+                    archivo
+                )
+                _pngResult.value = PngExportResult(uri, if (esSolo) "image/png" else "application/zip")
+                cargarPredios()
+            } catch (e: Exception) {
+                _uiState.value = ExportarUiState.Error(e.message ?: "Error al generar PNG")
+            }
+        }
+    }
+
+    fun resetPng() { _pngResult.value = null }
 
     fun exportarLista(predios: List<PredioDto>, barrio: String?) {
         viewModelScope.launch {

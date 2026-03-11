@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -36,6 +37,7 @@ fun ExportarScreen(
     val uiState  by vm.uiState.collectAsStateWithLifecycle()
     val busqueda by vm.busqueda.collectAsStateWithLifecycle()
     val listaUri by vm.listaUri.collectAsStateWithLifecycle()
+    val pngResult by vm.pngResult.collectAsStateWithLifecycle()
     val context  = LocalContext.current
 
     LaunchedEffect(proyectoId) { vm.setProyectoId(proyectoId) }
@@ -66,6 +68,21 @@ fun ExportarScreen(
             }
             context.startActivity(intent)
             vm.resetLista()
+        }
+    }
+    LaunchedEffect(pngResult) {
+        pngResult?.let { result ->
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = result.mimeType
+                putExtra(Intent.EXTRA_STREAM, result.uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val label = if (result.mimeType == "image/png") "Compartir PNG" else "Compartir ZIP"
+            val intent = Intent.createChooser(shareIntent, label).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            vm.resetPng()
         }
     }
 
@@ -99,7 +116,7 @@ fun ExportarScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(16.dp))
-                        Text("Generando PDF…", style = MaterialTheme.typography.bodyLarge)
+                        Text("Generando…", style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -215,14 +232,30 @@ fun ExportarScreen(
                             else "Exportar ${state.seleccionados.size} predios"
                         )
                     }
-                    OutlinedButton(
-                        onClick = { vm.exportarLista(prediosFiltrados, null) },
-                        enabled = prediosFiltrados.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Outlined.TableRows, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Exportar lista (${prediosFiltrados.size})")
+                        OutlinedButton(
+                            onClick = { vm.exportarPng() },
+                            enabled = state.seleccionados.size == 1,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Exportar PNG")
+                        }
+                        OutlinedButton(
+                            onClick = { vm.exportarLista(prediosFiltrados, null) },
+                            enabled = prediosFiltrados.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.TableRows, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Exportar lista")
+                        }
                     }
                 }
             }

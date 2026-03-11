@@ -1,6 +1,7 @@
 package com.jucha.acometidasapp.core.utils
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Environment
 import android.util.Log
@@ -16,11 +17,15 @@ import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDTextField
+import com.tom_roush.pdfbox.rendering.PDFRenderer
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class PdfGeneratorService(private val context: Context) {
 
@@ -38,7 +43,7 @@ class PdfGeneratorService(private val context: Context) {
         val stream = context.assets.open(plantilla)
         val doc = PDDocument.load(stream)
         rellenarCampos(doc, predio, fotos, empresaContratista, supervisorObra, fechaEmpresa, fechaSupervisor, tipoProyecto)
-        return guardarDocumento(doc, "acometida_${predio.codigoPredio}.pdf")
+        return guardarDocumento(doc, "${predio.codigoPredio}.pdf")
     }
 
     fun generarPdfBatch(
@@ -46,7 +51,8 @@ class PdfGeneratorService(private val context: Context) {
         fotosPorPredio: Map<String, List<FotoDto>>,
         empresaContratista: String = "",
         supervisorObra: String = "",
-        tipoProyecto: String = "agua_potable"
+        tipoProyecto: String = "agua_potable",
+        proyectoNombre: String = ""
     ): File {
         val plantilla = if (tipoProyecto == "alcantarillado")
             "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
@@ -72,10 +78,70 @@ class PdfGeneratorService(private val context: Context) {
             partsToClose.add(part)
             merged.importPage(part.getPage(0))
         }
-        val result = guardarDocumento(merged, "acometidas_batch_${System.currentTimeMillis()}.pdf")
+        val nombreSanitizado = proyectoNombre.trim().replace(Regex("[^a-zA-Z0-9\\-]"), "_").replace(Regex("_+"), "_").trim('_')
+        val fechaStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        val batchName = if (nombreSanitizado.isNotEmpty()) "predios_${nombreSanitizado}_$fechaStr.pdf" else "predios_$fechaStr.pdf"
+        val result = guardarDocumento(merged, batchName)
         partsToClose.forEach { it.close() }
         tempFiles.forEach { it.delete() }
         return result
+    }
+
+    fun generarPngIndividual(
+        predio: PredioDto,
+        fotos: List<FotoDto>,
+        empresaContratista: String = "",
+        supervisorObra: String = "",
+        fechaEmpresa: String = "",
+        fechaSupervisor: String = "",
+        tipoProyecto: String = "agua_potable"
+    ): File {
+        val plantilla = if (tipoProyecto == "alcantarillado")
+            "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
+        val stream = context.assets.open(plantilla)
+        val doc = PDDocument.load(stream)
+        rellenarCampos(doc, predio, fotos, empresaContratista, supervisorObra, fechaEmpresa, fechaSupervisor, tipoProyecto)
+        val renderer = PDFRenderer(doc)
+        val bitmap = renderer.renderImage(0, 4.17f) // ~300 DPI apto para impresión
+        doc.close()
+        val outFile = File(context.cacheDir, "${predio.codigoPredio}.png")
+        FileOutputStream(outFile).use { fos ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+        }
+        bitmap.recycle()
+        return outFile
+    }
+
+    fun generarPngBatch(
+        predios: List<PredioDto>,
+        fotosPorPredio: Map<String, List<FotoDto>>,
+        empresaContratista: String = "",
+        supervisorObra: String = "",
+        tipoProyecto: String = "agua_potable",
+        proyectoNombre: String = ""
+    ): File {
+        val plantilla = if (tipoProyecto == "alcantarillado")
+            "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
+        val nombreSanitizado = proyectoNombre.trim().replace(Regex("[^a-zA-Z0-9\\-]"), "_").replace(Regex("_+"), "_").trim('_')
+        val fechaStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        val zipName = if (nombreSanitizado.isNotEmpty()) "predios_${nombreSanitizado}_$fechaStr.zip" else "predios_$fechaStr.zip"
+        val zipFile = File(context.cacheDir, zipName)
+        ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
+            predios.forEach { predio ->
+                val stream = context.assets.open(plantilla)
+                val doc = PDDocument.load(stream)
+                rellenarCampos(doc, predio, fotosPorPredio[predio.id] ?: emptyList(),
+                    empresaContratista, supervisorObra, tipoProyecto = tipoProyecto)
+                val renderer = PDFRenderer(doc)
+                val bitmap = renderer.renderImage(0, 4.17f) // ~300 DPI apto para impresión
+                doc.close()
+                zos.putNextEntry(ZipEntry("${predio.codigoPredio}.png"))
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, zos)
+                zos.closeEntry()
+                bitmap.recycle()
+            }
+        }
+        return zipFile
     }
 
     private fun rellenarCampos(
@@ -354,7 +420,7 @@ class PdfGeneratorService(private val context: Context) {
         drawPageTitle()
         drawTableHeader()
 
-        predios.forEachIndexed { idx, p ->
+        predios.sortedBy { it.usuario.uppercase(Locale.getDefault()) }.forEachIndexed { idx, p ->
             if (y - rH < mB + rH) {
                 newPage(); drawPageTitle(); drawTableHeader()
             }

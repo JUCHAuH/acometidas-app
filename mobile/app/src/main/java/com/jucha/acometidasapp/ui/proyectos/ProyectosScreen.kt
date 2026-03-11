@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -145,7 +146,12 @@ fun ProyectosScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("AquaDocs", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Partes de Instalación · Camacho",
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             "${SesionUsuario.nombre} · ${if (isAdmin) "Admin" else "Encargado"}",
                             style = MaterialTheme.typography.labelSmall,

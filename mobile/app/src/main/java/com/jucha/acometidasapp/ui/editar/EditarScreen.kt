@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -60,8 +62,9 @@ fun EditarScreen(
     val context   = LocalContext.current
     val saveState by vm.saveState.collectAsStateWithLifecycle()
 
-    var pendingUri  by remember { mutableStateOf<Uri?>(null) }
-    var pendingTipo by remember { mutableStateOf("") }
+    var pendingUri        by remember { mutableStateOf<Uri?>(null) }
+    var pendingTipo       by remember { mutableStateOf("") }
+    var mostrarDialogFoto by remember { mutableStateOf(false) }
 
     val cropLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -94,6 +97,22 @@ fun EditarScreen(
         if (granted) pendingUri?.let { cameraLauncher.launch(it) }
     }
 
+    val galleryLauncher = rememberLauncherForActivityResult(GetContent()) { uri ->
+        uri?.let { selected ->
+            val output = crearUriTemporal(context)
+            val (ratioW, ratioH) = when (pendingTipo) {
+                "predio" -> 503f to 269f
+                else     -> 255f to 184f
+            }
+            cropLauncher.launch(
+                UCrop.of(selected, output)
+                    .withAspectRatio(ratioW, ratioH)
+                    .withMaxResultSize(1500, 1500)
+                    .getIntent(context)
+            )
+        }
+    }
+
     fun abrirCamara(tipo: String) {
         val uri = crearUriTemporal(context)
         pendingUri  = uri
@@ -104,7 +123,44 @@ fun EditarScreen(
         else permLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    // ── Dialogo éxito ────────────────────────────────────────────────────────
+    if (mostrarDialogFoto) {
+        Dialog(onDismissRequest = { mostrarDialogFoto = false }) {
+            Card(shape = MaterialTheme.shapes.large) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Agregar foto",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "¿Cómo querés agregar la foto?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                    ) {
+                        OutlinedButton(
+                            onClick = { mostrarDialogFoto = false; galleryLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Galería") }
+                        Button(
+                            onClick = { mostrarDialogFoto = false; abrirCamara(pendingTipo) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Cámara") }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialogo éxito
     if (saveState is EditarSaveState.Success) {
         AlertDialog(
             onDismissRequest = { vm.resetSaveState(); navController.popBackStack() },
@@ -119,7 +175,7 @@ fun EditarScreen(
         )
     }
 
-    // ── Dialogo error ────────────────────────────────────────────────────────
+    // Dialogo error
     if (saveState is EditarSaveState.Error) {
         AlertDialog(
             onDismissRequest = { vm.resetSaveState() },
@@ -169,7 +225,7 @@ fun EditarScreen(
         }
     ) { padding ->
 
-        // ── Estado de carga ──────────────────────────────────────────────────
+        // Estado de carga
         if (vm.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -184,7 +240,7 @@ fun EditarScreen(
             return@Scaffold
         }
 
-        // ── Formulario ───────────────────────────────────────────────────────
+        //Formulario
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
@@ -240,7 +296,7 @@ fun EditarScreen(
                         urlActual = vm.fotoPredioUrl,
                         label     = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
                         height    = 220.dp,
-                        onClick   = { abrirCamara("predio") }
+                        onClick   = { pendingTipo = "predio"; mostrarDialogFoto = true }
                     )
                 }
             }
@@ -254,7 +310,7 @@ fun EditarScreen(
                             urlActual = vm.fotoAcometidaUrl,
                             label     = "DATOS DE ACOMETIDA INSTALADA",
                             height    = 180.dp,
-                            onClick   = { abrirCamara("acometida") },
+                            onClick   = { pendingTipo = "acometida"; mostrarDialogFoto = true },
                             modifier  = Modifier.weight(1f)
                         )
                         FotoBoxEditar(
@@ -265,7 +321,7 @@ fun EditarScreen(
                                         else
                                             "MEDIDOR INSTALADO",
                             height    = 180.dp,
-                            onClick   = { abrirCamara("medidor") },
+                            onClick   = { pendingTipo = "medidor"; mostrarDialogFoto = true },
                             modifier  = Modifier.weight(1f)
                         )
                     }
@@ -276,8 +332,6 @@ fun EditarScreen(
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun FormCard(content: @Composable ColumnScope.() -> Unit) {
@@ -352,7 +406,7 @@ private fun FotoBoxEditar(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Toca para tomar foto",
+                        "Toca para agregar foto",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )
