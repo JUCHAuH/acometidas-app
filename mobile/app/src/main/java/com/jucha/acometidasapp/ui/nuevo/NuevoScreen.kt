@@ -177,9 +177,10 @@ fun NuevoScreen(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoForm("Nº PARTE", vm.numeroParte, { vm.numeroParte = it }, Modifier.weight(1f))
-                        CampoForm("Nº CONTRATO *", vm.numeroContrato, { vm.numeroContrato = it }, Modifier.weight(1.5f))
-                        CampoForm("CÓDIGO PREDIO *", vm.codigoPredio, { vm.codigoPredio = it }, Modifier.weight(1.5f))
+                        CampoForm("Nº CONTRATO", vm.numeroContrato, { vm.numeroContrato = it }, Modifier.weight(1f))
+                        CampoForm("CÓDIGO PREDIO *", vm.codigoPredio,
+                            { if (it.all { c -> c.isDigit() } && it.length <= 9) vm.codigoPredio = it },
+                            Modifier.weight(1f), KeyboardType.Number)
                     }
                 }
             }
@@ -187,10 +188,7 @@ fun NuevoScreen(
             // Usuario 
             item {
                 FormCard {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoForm("USUARIO *", vm.usuario, { vm.usuario = it }, Modifier.weight(2f))
-                        CampoForm("Nº TELF", vm.telefonoUsuario, { vm.telefonoUsuario = it }, Modifier.weight(1f), KeyboardType.Phone)
-                    }
+                    CampoForm("USUARIO *", vm.usuario, { vm.usuario = it }, Modifier.fillMaxWidth())
                 }
             }
 
@@ -237,61 +235,6 @@ fun NuevoScreen(
                             onClick = { abrirCamara("medidor") },
                             modifier = Modifier.weight(1f)
                         )
-                    }
-                }
-            }
-
-            // Observaciones
-            item {
-                FormCard {
-                    OutlinedTextField(
-                        value = vm.observaciones,
-                        onValueChange = { vm.observaciones = it },
-                        label = { Text("OBSERVACIONES") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 5
-                    )
-                }
-            }
-
-            // Estado
-            item {
-                FormCard {
-                    Text(
-                        "ESTADO DEL PARTE",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    val opciones = listOf("pendiente", "en_proceso", "completo")
-                    val labels   = mapOf("pendiente" to "Pendiente", "en_proceso" to "En proceso", "completo" to "Completo")
-                    val colores  = mapOf(
-                        "pendiente"  to Color(0xFFF59E0B),
-                        "en_proceso" to Color(0xFF3B82F6),
-                        "completo"   to Color(0xFF22C55E)
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        opciones.forEach { op ->
-                            val seleccionado = vm.estado == op
-                            val color = colores[op] ?: MaterialTheme.colorScheme.outline
-                            FilterChip(
-                                selected = seleccionado,
-                                onClick  = { vm.estado = op },
-                                label    = { Text(labels[op] ?: op) },
-                                colors   = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor    = color.copy(alpha = 0.15f),
-                                    selectedLabelColor        = color,
-                                    selectedLeadingIconColor  = color
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled  = true,
-                                    selected = seleccionado,
-                                    selectedBorderColor = color,
-                                    selectedBorderWidth = 1.5.dp
-                                )
-                            )
-                        }
                     }
                 }
             }

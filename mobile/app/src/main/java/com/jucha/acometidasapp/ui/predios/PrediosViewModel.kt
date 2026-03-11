@@ -56,6 +56,8 @@ class PrediosViewModel : ViewModel() {
 
     fun eliminarPredio(id: String) {
         viewModelScope.launch {
+            // Borrar fotos del Storage antes de borrar el predio
+            repository.deleteStorageFilesForPredio(id)
             repository.deletePredio(id)
                 .onSuccess { cargarPredios() }
                 .onFailure { e ->

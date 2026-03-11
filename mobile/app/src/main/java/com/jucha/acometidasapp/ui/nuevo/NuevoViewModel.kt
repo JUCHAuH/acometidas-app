@@ -30,22 +30,16 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
     )
 
-    // Campos del formulario ────────────────────────────────────────────────
-    var numeroParte      by mutableStateOf("")
+    // Campos del formulario
     var numeroContrato   by mutableStateOf("")
     var codigoPredio     by mutableStateOf("")
     var usuario          by mutableStateOf("")
-    var telefonoUsuario  by mutableStateOf("")
     var direccion        by mutableStateOf("")
-    var observaciones    by mutableStateOf("")
 
     // Fotos capturadas (URIs locales del dispositivo)
     var fotoPredioUri     by mutableStateOf<Uri?>(null)
     var fotoAcometidaUri  by mutableStateOf<Uri?>(null)
     var fotoMedidorUri    by mutableStateOf<Uri?>(null)
-
-    // Estado del parte
-    var estado by mutableStateOf("pendiente")
 
     // Proyecto activo
     var proyectoId: String = ""
@@ -67,8 +61,8 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun guardar() {
-        if (numeroContrato.isBlank() || codigoPredio.isBlank() || usuario.isBlank()) {
-            _saveState.value = NuevoSaveState.Error("Nº Contrato, Código Predio y Usuario son obligatorios")
+        if (codigoPredio.isBlank() || usuario.isBlank() || direccion.isBlank()) {
+            _saveState.value = NuevoSaveState.Error("Código Predio, Usuario y Dirección son obligatorios")
             return
         }
 
@@ -76,14 +70,10 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.createPredio(
                 CreatePredioDto(
-                    numeroParte     = numeroParte.ifBlank { null },
                     numeroContrato  = numeroContrato,
                     codigoPredio    = codigoPredio,
                     usuario         = usuario,
-                    telefonoUsuario = telefonoUsuario.ifBlank { null },
                     direccion       = direccion.ifBlank { null },
-                    observaciones   = observaciones.ifBlank { null },
-                    estado          = estado,
                     proyectoId      = proyectoId
                 )
             ).onSuccess { predio ->
@@ -112,7 +102,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                             }
                     }
                 }
-                limpiarFormulario()
+                resetFormulario()
                 _saveState.value = NuevoSaveState.Success
             }.onFailure { error ->
                 _saveState.value = NuevoSaveState.Error(
@@ -122,17 +112,18 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun limpiarFormulario() {
-        numeroParte     = ""
+    fun resetFormulario() {
         numeroContrato  = ""
         codigoPredio    = ""
         usuario         = ""
-        telefonoUsuario = ""
         direccion       = ""
-        observaciones   = ""
         fotoPredioUri    = null
         fotoAcometidaUri = null
         fotoMedidorUri   = null
-        estado           = "pendiente"
     }
+
+    val hasUnsavedChanges: Boolean
+        get() = numeroContrato.isNotBlank() || codigoPredio.isNotBlank() ||
+                usuario.isNotBlank() || direccion.isNotBlank() ||
+                fotoPredioUri != null || fotoAcometidaUri != null || fotoMedidorUri != null
 }

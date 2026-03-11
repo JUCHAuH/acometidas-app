@@ -41,13 +41,10 @@ class EditarViewModel(
     var loadError    by mutableStateOf<String?>(null)
 
     // ── Campos del formulario ────────────────────────────────────────────────
-    var numeroParte     by mutableStateOf("")
     var numeroContrato  by mutableStateOf("")
     var codigoPredio    by mutableStateOf("")
     var usuario         by mutableStateOf("")
-    var telefonoUsuario by mutableStateOf("")
     var direccion       by mutableStateOf("")
-    var observaciones   by mutableStateOf("")
     var estado          by mutableStateOf("pendiente")
 
     // ── Fotos existentes (URLs del servidor) ─────────────────────────────────
@@ -72,13 +69,10 @@ class EditarViewModel(
             loadError  = null
             repository.getPredioById(predioId)
                 .onSuccess { predio ->
-                    numeroParte     = predio.numeroParte ?: ""
                     numeroContrato  = predio.numeroContrato
                     codigoPredio    = predio.codigoPredio
                     usuario         = predio.usuario
-                    telefonoUsuario = predio.telefonoUsuario ?: ""
                     direccion       = predio.direccion ?: ""
-                    observaciones   = predio.observaciones ?: ""
                     estado          = predio.estado
                     // Cargar fotos existentes
                     repository.getFotosByPredio(predioId).onSuccess { fotos ->
@@ -106,8 +100,8 @@ class EditarViewModel(
     fun resetSaveState() { _saveState.value = EditarSaveState.Idle }
 
     fun guardar() {
-        if (numeroContrato.isBlank() || codigoPredio.isBlank() || usuario.isBlank()) {
-            _saveState.value = EditarSaveState.Error("Nº Contrato, Código Predio y Usuario son obligatorios")
+        if (codigoPredio.isBlank() || usuario.isBlank() || direccion.isBlank()) {
+            _saveState.value = EditarSaveState.Error("Código Predio, Usuario y Dirección son obligatorios")
             return
         }
         _saveState.value = EditarSaveState.Saving
@@ -115,13 +109,10 @@ class EditarViewModel(
             repository.updatePredio(
                 id = predioId,
                 update = UpdatePredioDto(
-                    numeroParte     = numeroParte.ifBlank { null },
                     numeroContrato  = numeroContrato,
                     codigoPredio    = codigoPredio,
                     usuario         = usuario,
-                    telefonoUsuario = telefonoUsuario.ifBlank { null },
                     direccion       = direccion.ifBlank { null },
-                    observaciones   = observaciones.ifBlank { null },
                     estado          = estado
                 )
             ).onSuccess {

@@ -1,15 +1,15 @@
 package com.jucha.acometidasapp.ui.main
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -22,6 +22,7 @@ import com.jucha.acometidasapp.core.navigation.Routes
 import com.jucha.acometidasapp.ui.editar.EditarScreen
 import com.jucha.acometidasapp.ui.exportar.ExportarScreen
 import com.jucha.acometidasapp.ui.nuevo.NuevoScreen
+import com.jucha.acometidasapp.ui.nuevo.NuevoViewModel
 import com.jucha.acometidasapp.ui.predios.PrediosScreen
 
 data class BottomNavItem(
@@ -47,6 +48,31 @@ fun MainScreen(navController: NavController) {
     val currentRoute = navBackStackEntry?.destination?.route
     val mostrarBottomBar = currentRoute !in rutasSinBottomNav
 
+    val nuevoVm: NuevoViewModel = viewModel()
+    var pendingRoute by remember { mutableStateOf<String?>(null) }
+
+    if (pendingRoute != null) {
+        AlertDialog(
+            onDismissRequest = { pendingRoute = null },
+            title = { Text("Cambios sin guardar") },
+            text  = { Text("Tensés cambios sin guardar en el formulario. ¿Descarás y seguís?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    nuevoVm.resetFormulario()
+                    innerNavController.navigate(pendingRoute!!) {
+                        popUpTo(innerNavController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState    = true
+                    }
+                    pendingRoute = null
+                }) { Text("Descartar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRoute = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
     Scaffold(
         bottomBar = {
             if (mostrarBottomBar) {
@@ -58,12 +84,18 @@ fun MainScreen(navController: NavController) {
                             selected = navBackStackEntry?.destination?.hierarchy
                                 ?.any { it.route == item.route } == true,
                             onClick  = {
-                                innerNavController.navigate(item.route) {
-                                    popUpTo(innerNavController.graph.findStartDestination().id) {
-                                        saveState = true
+                                val destino = item.route
+                                val estaEnNuevo = currentRoute == Routes.Tab.NUEVO
+                                if (estaEnNuevo && destino != Routes.Tab.NUEVO && nuevoVm.hasUnsavedChanges) {
+                                    pendingRoute = destino
+                                } else {
+                                    innerNavController.navigate(destino) {
+                                        popUpTo(innerNavController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState    = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState    = true
                                 }
                             }
                         )
@@ -85,7 +117,7 @@ fun MainScreen(navController: NavController) {
                 )
             }
             composable(Routes.Tab.NUEVO) {
-                NuevoScreen(proyectoId = proyectoId)
+                NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
             }
             composable(Routes.Tab.EXPORTAR) {
                 ExportarScreen(proyectoId = proyectoId)

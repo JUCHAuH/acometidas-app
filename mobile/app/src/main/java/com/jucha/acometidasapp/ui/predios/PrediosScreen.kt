@@ -258,10 +258,9 @@ private fun PredioItem(
 
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxHeight()
             ) {
-                EstadoChip(estado = predio.estado)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick  = { onEditar() },
@@ -285,26 +284,3 @@ private fun PredioItem(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun EstadoChip(estado: String) {
-    val (label, color) = when (estado) {
-        "pendiente"  -> "Pendiente"  to Color(0xFFF59E0B)
-        "en_proceso" -> "En proceso" to Color(0xFF3B82F6)
-        "completo"   -> "Completo"   to Color(0xFF22C55E)
-        else         -> estado       to MaterialTheme.colorScheme.outline
-    }
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.15f)
-    ) {
-        Text(
-            text     = label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style    = MaterialTheme.typography.labelSmall,
-            color    = color,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}

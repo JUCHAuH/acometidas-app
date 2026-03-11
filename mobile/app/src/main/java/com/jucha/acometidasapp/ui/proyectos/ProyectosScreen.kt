@@ -34,7 +34,7 @@ fun ProyectosScreen(
     var nombreNuevo         by remember { mutableStateOf("") }
     var proyectoAEliminar   by remember { mutableStateOf<ProyectoDto?>(null) }
 
-    // ─── Diálogo: crear proyecto ───────────────────────────────────────────
+    // Crear proyecto
     if (mostrarDialogoCrear) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = "" },
@@ -67,7 +67,7 @@ fun ProyectosScreen(
         )
     }
 
-    // ─── Diálogo: confirmar eliminación ────────────────────────────────────
+    // Confirmar eliminación
     proyectoAEliminar?.let { proy ->
         AlertDialog(
             onDismissRequest = { proyectoAEliminar = null },
@@ -189,7 +189,6 @@ fun ProyectosScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ProyectoItem(

@@ -51,14 +51,12 @@ class ProyectosViewModel : ViewModel() {
 
     fun eliminarProyecto(id: String) {
         viewModelScope.launch {
-            // 1. Obtener todos los predios del proyecto para borrar sus fotos del Storage
             predioRepository.getPrediosByProyecto(id)
                 .onSuccess { predios ->
                     predios.forEach { predio ->
                         predioRepository.deleteStorageFilesForPredio(predio.id)
                     }
                 }
-            // 2. Borrar el proyecto (CASCADE borra predios y filas de fotos en BD)
             repository.deleteProyecto(id)
                 .onSuccess { cargarProyectos() }
                 .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al eliminar proyecto") }

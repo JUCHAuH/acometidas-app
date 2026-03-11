@@ -200,9 +200,10 @@ fun EditarScreen(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoForm("Nº PARTE",       vm.numeroParte,    { vm.numeroParte = it },    Modifier.weight(1f))
-                        CampoForm("Nº CONTRATO *",  vm.numeroContrato, { vm.numeroContrato = it }, Modifier.weight(1.5f))
-                        CampoForm("CÓDIGO PREDIO *",vm.codigoPredio,   { vm.codigoPredio = it },   Modifier.weight(1.5f))
+                        CampoForm("Nº CONTRATO",    vm.numeroContrato, { vm.numeroContrato = it }, Modifier.weight(1f))
+                        CampoForm("CÓDIGO PREDIO *",vm.codigoPredio,
+                            { if (it.all { c -> c.isDigit() } && it.length <= 9) vm.codigoPredio = it },
+                            Modifier.weight(1f), KeyboardType.Number)
                     }
                 }
             }
@@ -210,10 +211,7 @@ fun EditarScreen(
             // Usuario
             item {
                 FormCard {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CampoForm("USUARIO *", vm.usuario,         { vm.usuario = it },         Modifier.weight(2f))
-                        CampoForm("Nº TELF",   vm.telefonoUsuario, { vm.telefonoUsuario = it }, Modifier.weight(1f), KeyboardType.Phone)
-                    }
+                    CampoForm("USUARIO *", vm.usuario, { vm.usuario = it }, Modifier.fillMaxWidth())
                 }
             }
 
@@ -221,16 +219,6 @@ fun EditarScreen(
             item {
                 FormCard {
                     CampoForm("DIRECCIÓN", vm.direccion, { vm.direccion = it }, Modifier.fillMaxWidth())
-                }
-            }
-
-            // Estado
-            item {
-                FormCard {
-                    EstadoSelector(
-                        estado    = vm.estado,
-                        onCambiar = { vm.estado = it }
-                    )
                 }
             }
 
@@ -277,53 +265,12 @@ fun EditarScreen(
                 }
             }
 
-            // Observaciones
-            item {
-                FormCard {
-                    OutlinedTextField(
-                        value = vm.observaciones,
-                        onValueChange = { vm.observaciones = it },
-                        label = { Text("OBSERVACIONES") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 5
-                    )
-                }
-            }
-
             item { Spacer(Modifier.height(72.dp)) }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun EstadoSelector(estado: String, onCambiar: (String) -> Unit) {
-    val opciones = listOf("pendiente", "en_proceso", "completo")
-    var expanded by remember { mutableStateOf(false) }
-    val labels = mapOf("pendiente" to "Pendiente", "en_proceso" to "En proceso", "completo" to "Completo")
-
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-        OutlinedTextField(
-            value = labels[estado] ?: estado,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Estado") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth()
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            opciones.forEach { op ->
-                DropdownMenuItem(
-                    text = { Text(labels[op] ?: op) },
-                    onClick = { onCambiar(op); expanded = false }
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun FormCard(content: @Composable ColumnScope.() -> Unit) {
