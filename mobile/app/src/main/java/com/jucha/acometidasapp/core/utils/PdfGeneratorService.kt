@@ -3,7 +3,9 @@ package com.jucha.acometidasapp.core.utils
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.jucha.acometidasapp.data.model.FotoDto
 import com.jucha.acometidasapp.data.model.PredioDto
@@ -28,6 +30,11 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class PdfGeneratorService(private val context: Context) {
+
+    private companion object {
+        // Higher DPI keeps text edges crisp in PNG exports.
+        private const val PNG_EXPORT_DPI = 450f
+    }
 
     fun generarPdfIndividual(
         predio: PredioDto,
@@ -98,13 +105,13 @@ class PdfGeneratorService(private val context: Context) {
     ): File {
         val plantilla = if (tipoProyecto == "alcantarillado")
             "plantilla_acometida_alcantarillado.pdf" else "plantilla_acometida.pdf"
-        val stream = context.assets.open(plantilla)
-        val doc = PDDocument.load(stream)
+        val doc = context.assets.open(plantilla).use { stream -> PDDocument.load(stream) }
         rellenarCampos(doc, predio, fotos, empresaContratista, supervisorObra, fechaEmpresa, fechaSupervisor, tipoProyecto)
-        val renderer = PDFRenderer(doc)
-        val bitmap = renderer.renderImage(0, 4.17f) // ~300 DPI apto para impresión
+        val bitmap = renderPngPage(doc)
         doc.close()
-        val outFile = File(context.cacheDir, "${predio.codigoPredio}.png")
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+        dir.mkdirs()
+        val outFile = File(dir, "${predio.codigoPredio}.png")
         FileOutputStream(outFile).use { fos ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
         }
@@ -125,15 +132,15 @@ class PdfGeneratorService(private val context: Context) {
         val nombreSanitizado = proyectoNombre.trim().replace(Regex("[^a-zA-Z0-9\\-]"), "_").replace(Regex("_+"), "_").trim('_')
         val fechaStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
         val zipName = if (nombreSanitizado.isNotEmpty()) "predios_${nombreSanitizado}_$fechaStr.zip" else "predios_$fechaStr.zip"
-        val zipFile = File(context.cacheDir, zipName)
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+        dir.mkdirs()
+        val zipFile = File(dir, zipName)
         ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
             predios.forEach { predio ->
-                val stream = context.assets.open(plantilla)
-                val doc = PDDocument.load(stream)
+                val doc = context.assets.open(plantilla).use { stream -> PDDocument.load(stream) }
                 rellenarCampos(doc, predio, fotosPorPredio[predio.id] ?: emptyList(),
                     empresaContratista, supervisorObra, tipoProyecto = tipoProyecto)
-                val renderer = PDFRenderer(doc)
-                val bitmap = renderer.renderImage(0, 4.17f) // ~300 DPI apto para impresión
+                val bitmap = renderPngPage(doc)
                 doc.close()
                 zos.putNextEntry(ZipEntry("${predio.codigoPredio}.png"))
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, zos)
@@ -142,6 +149,41 @@ class PdfGeneratorService(private val context: Context) {
             }
         }
         return zipFile
+    }
+
+    private fun renderPngPage(doc: PDDocument): Bitmap {
+        // Render with Android PdfRenderer to match how the PDF looks in viewers
+        // (better support for transparency/blending in logos).
+        runCatching {
+            val tempPdf = File.createTempFile("png_render_", ".pdf", context.cacheDir)
+            doc.save(tempPdf)
+
+            val pfd = ParcelFileDescriptor.open(tempPdf, ParcelFileDescriptor.MODE_READ_ONLY)
+            val renderer = PdfRenderer(pfd)
+            val page = renderer.openPage(0)
+
+            val scale = PNG_EXPORT_DPI / 72f
+            val widthPx = (page.width * scale).toInt().coerceAtLeast(1)
+            val heightPx = (page.height * scale).toInt().coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+
+            page.close()
+            renderer.close()
+            pfd.close()
+            tempPdf.delete()
+            return bitmap
+        }.onFailure {
+            Log.w("PdfGenerator", "Android PdfRenderer falló, usando fallback PDFBox: ${it.message}")
+        }
+
+        val renderer = PDFRenderer(doc)
+        return try {
+            renderer.renderImageWithDPI(0, PNG_EXPORT_DPI)
+        } catch (e: Exception) {
+            Log.w("PdfGenerator", "Fallback render PNG por excepción: ${e.message}")
+            renderer.renderImage(0, 4.17f)
+        }
     }
 
     private fun rellenarCampos(

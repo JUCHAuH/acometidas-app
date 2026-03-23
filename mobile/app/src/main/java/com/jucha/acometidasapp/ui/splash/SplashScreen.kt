@@ -99,21 +99,22 @@ fun SplashScreen(navController: NavController) {
 
             Spacer(Modifier.height(28.dp))
 
-            // Nombre de la app — sube desde abajo
+            // Nombre de la app
             Text(
-                text     = "AquaDocs",
-                style    = MaterialTheme.typography.displaySmall,
+                text     = "PARTES DE INSTALACION CAMACHO",
+                style    = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color    = Color.White,
+                maxLines = 2,
                 modifier = Modifier.graphicsLayer(
                     translationY = titleOffset,
                     alpha        = titleAlpha
-                )
+                ),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
             Spacer(Modifier.height(8.dp))
 
-            // Tagline — fade simple
             Text(
                 text     = "Gestión de acometidas",
                 style    = MaterialTheme.typography.bodyLarge,

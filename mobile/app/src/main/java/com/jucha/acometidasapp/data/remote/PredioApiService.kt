@@ -60,6 +60,12 @@ interface PredioApiService {
         @Query("tipo") tipoFilter: String
     ): Response<Void>
 
+    @DELETE("fotos")
+    @Headers("Prefer: return=minimal")
+    suspend fun deleteAllFotosByPredio(
+        @Query("predio_id") predioIdFilter: String
+    ): Response<Void>
+
     @PATCH("predios")
     @Headers("Prefer: return=representation")
     suspend fun updatePredio(

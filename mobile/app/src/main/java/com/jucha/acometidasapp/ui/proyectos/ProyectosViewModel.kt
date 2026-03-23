@@ -78,6 +78,7 @@ class ProyectosViewModel : ViewModel() {
                 .onSuccess { predios ->
                     predios.forEach { predio ->
                         predioRepository.deleteStorageFilesForPredio(predio.id)
+                                           predioRepository.deleteAllFotosByPredio(predio.id)
                     }
                 }
             repository.deleteProyecto(id)

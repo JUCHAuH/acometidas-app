@@ -19,12 +19,117 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class PredioRepository(
     private val api: PredioApiService,
     private val httpClient: OkHttpClient = SupabaseClient.httpClient
 ) {
+
+    private fun extractStorageKeyFromUrl(url: String): String {
+        val publicPrefix = "/storage/v1/object/public/acometidas/"
+        val objectPrefix = "/storage/v1/object/acometidas/"
+        return when {
+            url.contains(publicPrefix) -> url.substringAfter(publicPrefix).substringBefore("?")
+            url.contains(objectPrefix) -> url.substringAfter(objectPrefix).substringBefore("?")
+            else -> url.substringAfterLast("/").substringBefore("?")
+        }
+    }
+
+    private fun encodePathSegments(path: String): String {
+        return path.split("/")
+            .filter { it.isNotBlank() }
+            .joinToString("/") {
+                URLEncoder.encode(it, StandardCharsets.UTF_8.name()).replace("+", "%20")
+            }
+    }
+
+    private fun listStorageObjectKeysByPrefix(prefix: String): List<String> {
+        val requestBody = JSONObject()
+            .put("prefix", prefix)
+            .put("limit", 1000)
+            .put("offset", 0)
+            .toString()
+            .toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/list/acometidas")
+            .post(requestBody)
+            .header("Content-Type", "application/json")
+            .build()
+
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e(
+                        "Repository",
+                        "listStorageByPrefix falló prefix=$prefix: ${response.code} ${response.body?.string()}"
+                    )
+                    return@use emptyList()
+                }
+
+                val raw = response.body?.string().orEmpty()
+                if (raw.isBlank()) return@use emptyList()
+
+                val json = JSONArray(raw)
+                buildList {
+                    for (i in 0 until json.length()) {
+                        val item = json.optJSONObject(i) ?: continue
+                        val name = item.optString("name", "")
+                        if (name.isBlank()) continue
+                        add(if (name.startsWith(prefix)) name else "$prefix$name")
+                    }
+                }
+            }
+        }.onFailure { e ->
+            Log.e("Repository", "listStorageByPrefix excepción prefix=$prefix", e)
+        }.getOrElse { emptyList() }
+    }
+
+    private fun deleteStorageObjectByKey(objectKey: String) {
+        val encodedObjectKey = encodePathSegments(objectKey)
+        val singleDeleteRequest = Request.Builder()
+            .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/acometidas/$encodedObjectKey")
+            .delete()
+            .build()
+
+        runCatching {
+            httpClient.newCall(singleDeleteRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    Log.d("Repository", "deleteStorageFile ok $objectKey -> ${response.code}")
+                    return@use
+                }
+
+                val errorBody = response.body?.string().orEmpty()
+                Log.e("Repository", "deleteStorageFile falló $objectKey: ${response.code} $errorBody")
+
+                val batchBody = "{\"prefixes\":[\"$objectKey\"]}"
+                    .toRequestBody("application/json".toMediaType())
+                val batchDeleteRequest = Request.Builder()
+                    .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/acometidas")
+                    .delete(batchBody)
+                    .header("Content-Type", "application/json")
+                    .build()
+
+                httpClient.newCall(batchDeleteRequest).execute().use { batchResponse ->
+                    if (batchResponse.isSuccessful) {
+                        Log.d("Repository", "deleteStorageFile fallback ok $objectKey -> ${batchResponse.code}")
+                    } else {
+                        Log.e(
+                            "Repository",
+                            "deleteStorageFile fallback falló $objectKey: ${batchResponse.code} ${batchResponse.body?.string()}"
+                        )
+                    }
+                }
+            }
+        }.onFailure { e ->
+            Log.e("Repository", "deleteStorageFile excepción $objectKey", e)
+        }
+    }
 
     suspend fun getPredios(): Result<List<PredioDto>> = runCatching {
         api.getPredios()
@@ -61,38 +166,39 @@ class PredioRepository(
         if (!response.isSuccessful) throw Exception("Error al eliminar fotos: ${response.code()}")
     }
 
+    suspend fun deleteAllFotosByPredio(predioId: String): Result<Unit> = runCatching {
+        val response = api.deleteAllFotosByPredio(predioIdFilter = "eq.$predioId")
+        if (!response.isSuccessful) throw Exception("Error al eliminar fotos del predio: ${response.code()}")
+    }
+
     /**
      * Borra del Storage todos los archivos asociados a un predio.
-     * Usa el endpoint batch-delete de Supabase Storage.
-     * No lanza excepción si falla — la eliminación del predio en BD procede igual.
-     */
+    */
     suspend fun deleteStorageFilesForPredio(predioId: String) {
         withContext(Dispatchers.IO) {
-            val fotos = getFotosByPredio(predioId).getOrElse { return@withContext }
-            if (fotos.isEmpty()) return@withContext
+            Log.d("Repository", "deleteStorageFilesForPredio inicio predioId=$predioId")
 
-            val fileNames = fotos.map { it.url.substringAfterLast("/") }
-            val json = buildString {
-                append("{\"prefixes\":[")
-                fileNames.forEachIndexed { i, name ->
-                    if (i > 0) append(",")
-                    append("\"").append(name).append("\"")
-                }
-                append("]}") 
+            val keys = linkedSetOf<String>()
+
+            val fotosResult = getFotosByPredio(predioId)
+            fotosResult.onSuccess { fotos ->
+                fotos.mapTo(keys) { extractStorageKeyFromUrl(it.url) }
+                Log.d("Repository", "deleteStorageFilesForPredio fotosBD=${fotos.size}")
+            }.onFailure { e ->
+                Log.e("Repository", "deleteStorageFilesForPredio getFotos falló predioId=$predioId", e)
             }
-            val requestBody = json.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder()
-                .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/delete/acometidas")
-                .post(requestBody)
-                .header("Content-Type", "application/json")
-                .build()
-            runCatching {
-                httpClient.newCall(request).execute().use {
-                    Log.d("Repository", "deleteStorageFiles predioId=$predioId status=${it.code}")
-                }
-            }.onFailure {
-                Log.e("Repository", "deleteStorageFiles falló para predioId=$predioId", it)
+
+            val prefixKeys = listStorageObjectKeysByPrefix("${predioId}_")
+            keys.addAll(prefixKeys)
+
+            val objectKeys = keys.filter { it.isNotBlank() }
+            if (objectKeys.isEmpty()) {
+                Log.w("Repository", "deleteStorageFilesForPredio sin claves a borrar predioId=$predioId")
+                return@withContext
             }
+
+            Log.d("Repository", "deleteStorageFilesForPredio totalClaves=${objectKeys.size} predioId=$predioId")
+            objectKeys.forEach { deleteStorageObjectByKey(it) }
         }
     }
 

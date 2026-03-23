@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.TableRows
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,7 +35,6 @@ fun ExportarScreen(
 ) {
     val uiState  by vm.uiState.collectAsStateWithLifecycle()
     val busqueda by vm.busqueda.collectAsStateWithLifecycle()
-    val listaUri by vm.listaUri.collectAsStateWithLifecycle()
     val pngResult by vm.pngResult.collectAsStateWithLifecycle()
     val context  = LocalContext.current
 
@@ -54,20 +52,6 @@ fun ExportarScreen(
             }
             context.startActivity(intent)
             vm.resetDone()
-        }
-    }
-    LaunchedEffect(listaUri) {
-        listaUri?.let { uri ->
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val intent = Intent.createChooser(shareIntent, "Compartir Lista").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-            vm.resetLista()
         }
     }
     LaunchedEffect(pngResult) {
@@ -232,30 +216,14 @@ fun ExportarScreen(
                             else "Exportar ${state.seleccionados.size} predios"
                         )
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    OutlinedButton(
+                        onClick = { vm.exportarPng() },
+                        enabled = state.seleccionados.size == 1,
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = { vm.exportarPng() },
-                            enabled = state.seleccionados.size == 1,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Exportar PNG")
-                        }
-                        OutlinedButton(
-                            onClick = { vm.exportarLista(prediosFiltrados, null) },
-                            enabled = prediosFiltrados.isNotEmpty(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Outlined.TableRows, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Exportar lista")
-                        }
+                        Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Exportar PNG")
                     }
                 }
             }

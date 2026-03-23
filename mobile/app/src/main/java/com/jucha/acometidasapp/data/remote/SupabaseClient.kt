@@ -18,8 +18,9 @@ object SupabaseClient {
         val builder = original.newBuilder()
             .addHeader("apikey", BuildConfig.SUPABASE_KEY)
             .addHeader("Authorization", "Bearer ${BuildConfig.SUPABASE_KEY}")
-        // Agregar Content-Type: application/json si no tiene uno ya definido
-        if (original.header("Content-Type") == null) {
+ 
+        val body = original.body
+        if (body != null && body.contentLength() != 0L && original.header("Content-Type") == null) {
             builder.addHeader("Content-Type", "application/json")
         }
         chain.proceed(builder.build())
