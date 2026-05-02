@@ -32,7 +32,6 @@ import java.util.zip.ZipOutputStream
 class PdfGeneratorService(private val context: Context) {
 
     private companion object {
-        // Higher DPI keeps text edges crisp in PNG exports.
         private const val PNG_EXPORT_DPI = 450f
     }
 
