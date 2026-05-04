@@ -6,6 +6,10 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.jucha.acometidasapp.BuildConfig
+import com.jucha.acometidasapp.core.sync.SyncState
+import com.jucha.acometidasapp.data.local.AcometidasDatabase
+import com.jucha.acometidasapp.data.local.entity.FotoLocalEntity
+import com.jucha.acometidasapp.data.local.entity.PredioLocalEntity
 import com.jucha.acometidasapp.data.model.CreateFotoDto
 import com.jucha.acometidasapp.data.model.CreatePredioDto
 import com.jucha.acometidasapp.data.model.FotoDto
@@ -14,6 +18,7 @@ import com.jucha.acometidasapp.data.model.UpdatePredioDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.remote.SupabaseClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -21,6 +26,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -244,5 +250,269 @@ class PredioRepository(
             }
             "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/acometidas/$fileName"
         }
+    }
+
+    // ============ MÉTODOS OFFLINE-FIRST ============
+
+    /**
+     * Sube una foto de archivo local a Supabase Storage.
+     * Similar a uploadFoto pero recibe un File path string.
+     */
+    suspend fun uploadFoto(
+        filePath: String,
+        predioId: String,
+        tipo: String
+    ): Result<String> = runCatching {
+        withContext(Dispatchers.IO) {
+            val file = File(filePath)
+            if (!file.exists()) {
+                throw IOException("Archivo no existe: $filePath")
+            }
+
+            val raw = file.readBytes()
+            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+            val scaled = if (bitmap.width > 1280 || bitmap.height > 1280) {
+                val ratio = minOf(1280f / bitmap.width, 1280f / bitmap.height)
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * ratio).toInt(),
+                    (bitmap.height * ratio).toInt(),
+                    true
+                )
+            } else bitmap
+            val bytes = java.io.ByteArrayOutputStream().also {
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, it)
+            }.toByteArray()
+            Log.d("Repository", "uploadFoto tipo=$tipo original=${raw.size/1024}KB comprimido=${bytes.size/1024}KB")
+
+            val fileName = "${predioId}_${tipo}_${System.currentTimeMillis()}.jpg"
+            val requestBody = bytes.toRequestBody("image/jpeg".toMediaType())
+            val request = Request.Builder()
+                .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/acometidas/$fileName")
+                .post(requestBody)
+                .header("Content-Type", "image/jpeg")
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Upload fallo ${response.code}: ${response.body?.string()}")
+                }
+            }
+            "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/acometidas/$fileName"
+        }
+    }
+
+    /**
+     * Crea un predio en la base de datos local (Room).
+     */
+    suspend fun createPredioOffline(context: Context, predio: PredioLocalEntity): String {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        dao.insert(predio)
+        Log.d("Repository", "Predio creado localmente: ${predio.id}")
+        return predio.id
+    }
+
+    /**
+     * Inserta una foto en la base de datos local.
+     */
+    suspend fun insertFotoLocal(context: Context, foto: FotoLocalEntity): Long {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.fotoLocalDao()
+        return dao.insert(foto)
+    }
+
+    suspend fun getPredioLocalById(context: Context, id: String): PredioLocalEntity? {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getById(id)
+    }
+
+    /**
+     * Obtiene todos los predios de la BD local.
+     */
+    suspend fun getPrediosLocal(context: Context): List<PredioLocalEntity> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getAll()
+    }
+
+    /**
+     * Obtiene flow de predios locales (para actualización en tiempo real).
+     */
+    fun getPrediosLocalFlow(context: Context): Flow<List<PredioLocalEntity>> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getAllFlow()
+    }
+
+    /**
+     * Obtiene predios locales de un proyecto específico.
+     */
+    suspend fun getPrediosLocalByProyecto(context: Context, proyectoId: String): List<PredioLocalEntity> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getByProyectoId(proyectoId)
+    }
+
+    /**
+     * Obtiene flow de predios locales de un proyecto.
+     */
+    fun getPrediosLocalByProyectoFlow(context: Context, proyectoId: String): Flow<List<PredioLocalEntity>> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getByProyectoIdFlow(proyectoId)
+    }
+
+    /**
+     * Obtiene predios pendientes de sincronización.
+     */
+    suspend fun getPrediosPendingSync(context: Context): List<PredioLocalEntity> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        return dao.getBySyncState(SyncState.PENDING.name)
+    }
+
+    /**
+     * Actualiza el estado de sincronización de un predio.
+     */
+    suspend fun updatePredioSyncState(context: Context, predioId: String, syncState: SyncState) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        dao.updateSyncState(predioId, syncState.name)
+    }
+
+    /**
+     * Actualiza estado de sync con remote ID (después de sincronizar exitosamente).
+     */
+    suspend fun updatePredioSyncStateWithRemoteId(
+        context: Context,
+        predioId: String,
+        syncState: SyncState,
+        remoteId: String
+    ) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        dao.updateSyncStateWithRemoteId(predioId, syncState.name, remoteId)
+    }
+
+    /**
+     * Registra un error de sincronización.
+     */
+    suspend fun recordPredioSyncError(context: Context, predioId: String, error: String) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        dao.recordSyncError(predioId, SyncState.FAILED.name, error)
+    }
+
+    /**
+     * Obtiene fotos locales de un predio.
+     */
+    suspend fun getFotosLocal(context: Context, predioId: String): List<FotoLocalEntity> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.fotoLocalDao()
+        return dao.getByPredioId(predioId)
+    }
+
+    /**
+     * Obtiene flow de fotos locales.
+     */
+    fun getFotosLocalFlow(context: Context, predioId: String): Flow<List<FotoLocalEntity>> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.fotoLocalDao()
+        return dao.getByPredioIdFlow(predioId)
+    }
+
+    /**
+     * Borra un predio de la BD local.
+     */
+    suspend fun deletePredioLocal(context: Context, predioId: String) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.predioLocalDao()
+        dao.deleteById(predioId)
+    }
+
+    // ============ MÉTODOS DE PROYECTOS LOCALES ============
+
+    /**
+     * Inserta un proyecto en BD local.
+     */
+    suspend fun insertProyectoLocal(context: Context, proyecto: com.jucha.acometidasapp.data.local.entity.ProyectoLocalEntity) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoLocalDao()
+        dao.insertProyecto(proyecto)
+    }
+
+    /**
+     * Obtiene un proyecto local por ID.
+     */
+    suspend fun getProyectoLocalById(context: Context, proyectoId: String): com.jucha.acometidasapp.data.local.entity.ProyectoLocalEntity? {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoLocalDao()
+        return dao.getProyectoById(proyectoId)
+    }
+
+    /**
+     * Obtiene todos los proyectos locales.
+     */
+    suspend fun getAllProyectosLocal(context: Context): List<com.jucha.acometidasapp.data.local.entity.ProyectoLocalEntity> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoLocalDao()
+        return dao.getAllProyectos()
+    }
+
+    /**
+     * Limpia todos los proyectos locales (cuando sincroniza).
+     */
+    suspend fun deleteAllProyectosLocal(context: Context) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoLocalDao()
+        dao.deleteAllProyectos()
+    }
+
+    // ============ MÉTODOS DE ASIGNACIONES LOCALES ============
+
+    /**
+     * Inserta una asignación usuario-proyecto en BD local.
+     */
+    suspend fun insertProyectoUsuarioLocal(
+        context: Context,
+        usuarioId: String,
+        proyectoId: String
+    ) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoUsuarioLocalDao()
+        dao.insertAsignacion(
+            com.jucha.acometidasapp.data.local.entity.ProyectoUsuarioLocalEntity(
+                proyecto_id = proyectoId,
+                usuario_id = usuarioId
+            )
+        )
+    }
+
+    /**
+     * Obtiene los proyectos asignados a un usuario en BD local.
+     */
+    suspend fun getProyectosLocalDeUsuario(context: Context, usuarioId: String): List<String> {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoUsuarioLocalDao()
+        return dao.getProyectosDeUsuario(usuarioId)
+    }
+
+    /**
+     * Verifica si un usuario tiene asignado un proyecto.
+     */
+    suspend fun usuarioTieneProyectoLocal(context: Context, usuarioId: String, proyectoId: String): Boolean {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoUsuarioLocalDao()
+        return dao.usuarioTieneProyecto(usuarioId, proyectoId)
+    }
+
+    /**
+     * Limpia todas las asignaciones locales (cuando sincroniza).
+     */
+    suspend fun deleteAllAsignacionesLocal(context: Context) {
+        val db = AcometidasDatabase.getDatabase(context)
+        val dao = db.proyectoUsuarioLocalDao()
+        dao.deleteAllAsignaciones()
     }
 }

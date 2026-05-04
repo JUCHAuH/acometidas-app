@@ -8,6 +8,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.jucha.acometidasapp.core.sync.ConnectivityObserver
+import com.jucha.acometidasapp.core.sync.SyncManager
+import com.jucha.acometidasapp.core.sync.SyncState
+import com.jucha.acometidasapp.core.navigation.ProyectoSesion
+import com.jucha.acometidasapp.core.navigation.SesionUsuario
+import com.jucha.acometidasapp.core.utils.FileUtil
+import com.jucha.acometidasapp.data.local.entity.FotoLocalEntity
+import com.jucha.acometidasapp.data.local.entity.PredioLocalEntity
 import com.jucha.acometidasapp.data.model.CreateFotoDto
 import com.jucha.acometidasapp.data.model.CreatePredioDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
@@ -20,6 +28,7 @@ import kotlinx.coroutines.launch
 sealed class NuevoSaveState {
     object Idle : NuevoSaveState()
     object Saving : NuevoSaveState()
+    object SavingLocally : NuevoSaveState()  // Guardando en BD local sin internet
     object Success : NuevoSaveState()
     data class Error(val message: String) : NuevoSaveState()
 }
@@ -29,6 +38,9 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = PredioRepository(
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
     )
+
+    private val connectivityObserver = ConnectivityObserver(application)
+    private val fileUtil = FileUtil()
 
     // Campos del formulario
     var numeroContrato   by mutableStateOf("")
@@ -44,7 +56,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     // Proyecto activo
     var proyectoId: String = ""
 
-    // Estado de guardado 
+    // Estado de guardado
     private val _saveState = MutableStateFlow<NuevoSaveState>(NuevoSaveState.Idle)
     val saveState: StateFlow<NuevoSaveState> = _saveState
 
@@ -66,49 +78,154 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        _saveState.value = NuevoSaveState.Saving
         viewModelScope.launch {
-            repository.createPredio(
-                CreatePredioDto(
-                    numeroContrato  = numeroContrato,
-                    codigoPredio    = codigoPredio,
-                    usuario         = usuario,
-                    direccion       = direccion.ifBlank { null },
-                    proyectoId      = proyectoId
+            // Detectar si hay internet
+            val isOnline = connectivityObserver.isConnected()
+
+            if (isOnline) {
+                // Path ONLINE: guardar directamente en Supabase (original)
+                guardarOnline()
+            } else {
+                // Path OFFLINE: guardar localmente
+                guardarOffline()
+            }
+        }
+    }
+
+    private suspend fun guardarOnline() {
+        _saveState.value = NuevoSaveState.Saving
+        repository.createPredio(
+            CreatePredioDto(
+                numeroContrato  = numeroContrato,
+                codigoPredio    = codigoPredio,
+                usuario         = usuario,
+                direccion       = direccion.ifBlank { null },
+                proyectoId      = proyectoId
+            )
+        ).onSuccess { predio ->
+            // Subir cada foto al Storage y registrarla en la tabla fotos
+            val ctx = getApplication<Application>()
+            listOf(
+                fotoPredioUri    to "predio",
+                fotoAcometidaUri to "acometida",
+                fotoMedidorUri   to "medidor"
+            ).forEach { (uri, tipo) ->
+                if (uri != null) {
+                    Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
+                    repository.uploadFoto(ctx, uri, predio.id, tipo)
+                        .onSuccess { url ->
+                            Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
+                            repository.createFoto(
+                                CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
+                            ).onSuccess {
+                                Log.d("NuevoVM", "createFoto OK tipo=$tipo")
+                            }.onFailure { e ->
+                                Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+                            }
+                        }
+                        .onFailure { e ->
+                            Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}")
+                        }
+                }
+            }
+            resetFormulario()
+            _saveState.value = NuevoSaveState.Success
+        }.onFailure { error ->
+            _saveState.value = NuevoSaveState.Error(
+                error.message ?: "Error al guardar el predio"
+            )
+        }
+    }
+
+    private suspend fun guardarOffline() {
+        _saveState.value = NuevoSaveState.SavingLocally
+        try {
+            val ctx = getApplication<Application>()
+
+            // 1. VALIDAR que el proyecto existe y usuario tiene acceso
+            val proyectoLocal = repository.getProyectoLocalById(ctx, ProyectoSesion.id)
+            if (proyectoLocal == null) {
+                _saveState.value = NuevoSaveState.Error(
+                    "No tiene acceso a este proyecto. Conecte a internet para sincronizar permisos."
                 )
-            ).onSuccess { predio ->
-                // Subir cada foto al Storage y registrarla en la tabla fotos
-                val ctx = getApplication<Application>()
-                listOf(
-                    fotoPredioUri    to "predio",
-                    fotoAcometidaUri to "acometida",
-                    fotoMedidorUri   to "medidor"
-                ).forEach { (uri, tipo) ->
-                    if (uri != null) {
-                        Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
-                        repository.uploadFoto(ctx, uri, predio.id, tipo)
-                            .onSuccess { url ->
-                                Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
-                                repository.createFoto(
-                                    CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
-                                ).onSuccess {
-                                    Log.d("NuevoVM", "createFoto OK tipo=$tipo")
-                                }.onFailure { e ->
-                                    Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
-                                }
-                            }
-                            .onFailure { e ->
-                                Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}", e)
-                            }
+                return
+            }
+
+            // 2. Si es encargado, validar asignación
+            if (!SesionUsuario.isAdmin) {
+                val tieneAcceso = repository.usuarioTieneProyectoLocal(
+                    ctx,
+                    SesionUsuario.id,
+                    ProyectoSesion.id
+                )
+
+                if (!tieneAcceso) {
+                    _saveState.value = NuevoSaveState.Error(
+                        "No está asignado a este proyecto."
+                    )
+                    return
+                }
+            }
+
+            Log.d("NuevoVM", "Validación offline exitosa para proyecto: ${ProyectoSesion.id}")
+
+            // 3. Crear predio en BD local
+            val predioLocal = PredioLocalEntity(
+                numeroContrato = numeroContrato,
+                codigoPredio = codigoPredio,
+                usuario = usuario,
+                direccion = direccion.ifBlank { null },
+                proyectoId = ProyectoSesion.id.ifBlank { null },
+                estado = "pendiente",
+                syncState = SyncState.PENDING.name
+            )
+
+            val predioId = repository.createPredioOffline(ctx, predioLocal)
+            Log.d("NuevoVM", "Predio creado localmente: $predioId")
+
+            // 4. Guardar fotos locales
+            listOf(
+                fotoPredioUri    to "predio",
+                fotoAcometidaUri to "acometida",
+                fotoMedidorUri   to "medidor"
+            ).forEach { (uri, tipo) ->
+                if (uri != null) {
+                    try {
+                        Log.d("NuevoVM", "Guardando foto local tipo=$tipo")
+
+                        // Guardar archivo en ExternalFilesDir
+                        val fotoFile = fileUtil.saveFotoLocally(ctx, uri, predioId, tipo)
+                        Log.d("NuevoVM", "Foto guardada en: ${fotoFile.absolutePath}")
+
+                        // Crear registro en foto_local
+                        val fotoLocal = FotoLocalEntity(
+                            predioId = predioId,
+                            tipo = tipo,
+                            localPath = fotoFile.absolutePath,
+                            syncState = SyncState.PENDING.name
+                        )
+                        repository.insertFotoLocal(ctx, fotoLocal)
+                        Log.d("NuevoVM", "Foto registrada en BD local: $tipo")
+
+                    } catch (e: Exception) {
+                        Log.e("NuevoVM", "Error guardando foto local tipo=$tipo: ${e.message}", e)
+                        // Continuar con otras fotos
                     }
                 }
-                resetFormulario()
-                _saveState.value = NuevoSaveState.Success
-            }.onFailure { error ->
-                _saveState.value = NuevoSaveState.Error(
-                    error.message ?: "Error al guardar el predio"
-                )
             }
+
+            // 5. Enqueue sincronización cuando conecte
+            SyncManager.enqueueSyncPredios(ctx)
+            Log.d("NuevoVM", "Sync enqueued para $predioId")
+
+            resetFormulario()
+            _saveState.value = NuevoSaveState.Success
+
+        } catch (e: Exception) {
+            Log.e("NuevoVM", "Error guardando offline: ${e.message}", e)
+            _saveState.value = NuevoSaveState.Error(
+                "Error al guardar localmente: ${e.message ?: "Error desconocido"}"
+            )
         }
     }
 

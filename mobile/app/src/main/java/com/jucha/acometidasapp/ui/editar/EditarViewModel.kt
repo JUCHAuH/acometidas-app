@@ -67,6 +67,20 @@ class EditarViewModel(
         viewModelScope.launch {
             isLoading  = true
             loadError  = null
+
+            // 1. Intentar cargar de Room primero (predios locales)
+            val predioLocal = repository.getPredioLocalById(getApplication(), predioId)
+            if (predioLocal != null) {
+                numeroContrato  = predioLocal.numeroContrato
+                codigoPredio    = predioLocal.codigoPredio
+                usuario         = predioLocal.usuario
+                direccion       = predioLocal.direccion ?: ""
+                estado          = predioLocal.estado
+                isLoading = false
+                return@launch
+            }
+
+            // 2. Si no está en Room, intentar de la API
             repository.getPredioById(predioId)
                 .onSuccess { predio ->
                     numeroContrato  = predio.numeroContrato

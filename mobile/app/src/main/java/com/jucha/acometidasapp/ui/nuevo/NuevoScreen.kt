@@ -170,7 +170,7 @@ fun NuevoScreen(
             onDismissRequest = { vm.resetSaveState() },
             icon  = { Icon(Icons.Outlined.Check, null, tint = Color(0xFF22C55E)) },
             title = { Text("Guardado") },
-            text  = { Text("El predio fue registrado exitosamente.") },
+            text  = { Text("El predio fue registrado exitosamente. Se sincronizará cuando haya conexión a internet.") },
             confirmButton = {
                 TextButton(onClick = { vm.resetSaveState() }) { Text("Aceptar") }
             }
@@ -201,9 +201,9 @@ fun NuevoScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { if (saveState !is NuevoSaveState.Saving) vm.guardar() },
+                onClick = { if (saveState !is NuevoSaveState.Saving && saveState !is NuevoSaveState.SavingLocally) vm.guardar() },
                 icon = {
-                    if (saveState is NuevoSaveState.Saving) {
+                    if (saveState is NuevoSaveState.Saving || saveState is NuevoSaveState.SavingLocally) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
@@ -213,7 +213,15 @@ fun NuevoScreen(
                         Icon(Icons.Outlined.Check, null)
                     }
                 },
-                text = { Text("Guardar") }
+                text = {
+                    Text(
+                        when {
+                            saveState is NuevoSaveState.Saving -> "Guardando..."
+                            saveState is NuevoSaveState.SavingLocally -> "Guardando localmente..."
+                            else -> "Guardar"
+                        }
+                    )
+                }
             )
         }
     ) { padding ->

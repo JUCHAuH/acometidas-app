@@ -25,7 +25,9 @@ import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.navigation.Routes
 import com.jucha.acometidasapp.core.navigation.SesionUsuario
 import com.jucha.acometidasapp.core.theme.AzulAgua
+import com.jucha.acometidasapp.core.utils.SessionPreferences
 import com.jucha.acometidasapp.data.model.ProyectoDto
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +37,7 @@ fun ProyectosScreen(
 ) {
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val isAdmin = SesionUsuario.isAdmin
+    val scope = rememberCoroutineScope()
     var mostrarDialogoCrear by remember { mutableStateOf(false) }
     var nombreNuevo         by remember { mutableStateOf("") }
     var tipoNuevo           by remember { mutableStateOf("agua_potable") }
@@ -50,6 +53,10 @@ fun ProyectosScreen(
             text  = { Text("¿Querés cerrar sesión?") },
             confirmButton = {
                 TextButton(onClick = {
+                    // Limpiar sesión guardada y estado global
+                    scope.launch {
+                        SessionPreferences.clearSession(navController.context)
+                    }
                     SesionUsuario.clear()
                     mostrarLogout = false
                     navController.navigate(Routes.LOGIN) {

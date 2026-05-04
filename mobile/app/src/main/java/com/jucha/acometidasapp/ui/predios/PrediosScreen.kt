@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
@@ -15,8 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.jucha.acometidasapp.core.navigation.ProyectoSesion
+import com.jucha.acometidasapp.core.sync.SyncManager
 import com.jucha.acometidasapp.core.theme.AzulAgua
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +43,7 @@ fun PrediosScreen(
 ) {
     val uiState  by vm.uiState.collectAsStateWithLifecycle()
     val busqueda by vm.busqueda.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Cargar predios del proyecto seleccionado
     LaunchedEffect(proyectoId) { vm.setProyectoId(proyectoId) }
@@ -80,6 +84,9 @@ fun PrediosScreen(
                 actions = {
                     IconButton(onClick = { vm.cargarPredios() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
+                    }
+                    IconButton(onClick = { SyncManager.executeSyncNow(context) }) {
+                        Icon(Icons.Outlined.CloudUpload, contentDescription = "Sincronizar ahora")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -163,8 +170,10 @@ fun PrediosScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(prediosFiltrados, key = { it.id }) { predio ->
+                                val syncState = state.prediosLocales.find { it.id == predio.id || it.remoteId == predio.id }?.syncState
                                 PredioItem(
                                     predio     = predio,
+                                    syncState  = syncState,
                                     onEliminar = { vm.eliminarPredio(predio.id) },
                                     onEditar   = { navController?.navigate(Routes.editarPredio(predio.id)) }
                                 )
@@ -182,6 +191,7 @@ fun PrediosScreen(
 @Composable
 private fun PredioItem(
     predio: PredioDto,
+    syncState: String? = null,
     onEliminar: () -> Unit,
     onEditar: () -> Unit
 ) {
@@ -228,13 +238,47 @@ private fun PredioItem(
                 modifier  = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text       = predio.usuario,
-                    style      = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis
-                )
+                // Fila con usuario + badge de sync
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text       = predio.usuario,
+                        style      = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines   = 1,
+                        overflow   = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Badge de sincronización
+                    syncState?.let { state ->
+                        Spacer(Modifier.width(8.dp))
+                        when (state) {
+                            "PENDING" -> {
+                                Badge(
+                                    containerColor = Color(0xFFFFB74D),  // Amarillo
+                                    modifier = Modifier.padding(4.dp)
+                                ) { Text("⏳", fontSize = MaterialTheme.typography.labelSmall.fontSize) }
+                            }
+                            "SYNCING" -> {
+                                Badge(
+                                    containerColor = Color(0xFF81C3D7),  // Azul
+                                    modifier = Modifier.padding(4.dp)
+                                ) { Text("🔄", fontSize = MaterialTheme.typography.labelSmall.fontSize) }
+                            }
+                            "FAILED" -> {
+                                Badge(
+                                    containerColor = Color.Red,
+                                    modifier = Modifier.padding(4.dp)
+                                ) { Text("❌", fontSize = MaterialTheme.typography.labelSmall.fontSize) }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text     = "Cód: ${predio.codigoPredio}",
