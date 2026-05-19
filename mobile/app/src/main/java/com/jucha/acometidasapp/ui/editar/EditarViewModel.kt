@@ -36,28 +36,23 @@ class EditarViewModel(
         api = SupabaseClient.retrofit.create(PredioApiService::class.java)
     )
 
-    // ── Estado de carga inicial ──────────────────────────────────────────────
     var isLoading    by mutableStateOf(true)
     var loadError    by mutableStateOf<String?>(null)
 
-    // ── Campos del formulario ────────────────────────────────────────────────
     var numeroContrato  by mutableStateOf("")
     var codigoPredio    by mutableStateOf("")
     var usuario         by mutableStateOf("")
     var direccion       by mutableStateOf("")
     var estado          by mutableStateOf("pendiente")
 
-    // ── Fotos existentes (URLs del servidor) ─────────────────────────────────
     var fotoPredioUrl     by mutableStateOf<String?>(null)
     var fotoAcometidaUrl  by mutableStateOf<String?>(null)
     var fotoMedidorUrl    by mutableStateOf<String?>(null)
 
-    // ── Fotos nuevas capturadas localmente ───────────────────────────────────
     var fotoPredioUriNueva    by mutableStateOf<Uri?>(null)
     var fotoAcometidaUriNueva by mutableStateOf<Uri?>(null)
     var fotoMedidorUriNueva   by mutableStateOf<Uri?>(null)
 
-    // ── Estado de guardado ───────────────────────────────────────────────────
     private val _saveState = MutableStateFlow<EditarSaveState>(EditarSaveState.Idle)
     val saveState: StateFlow<EditarSaveState> = _saveState
 
@@ -68,7 +63,6 @@ class EditarViewModel(
             isLoading  = true
             loadError  = null
 
-            // 1. Intentar cargar de Room primero (predios locales)
             val predioLocal = repository.getPredioLocalById(getApplication(), predioId)
             if (predioLocal != null) {
                 numeroContrato  = predioLocal.numeroContrato
@@ -80,7 +74,6 @@ class EditarViewModel(
                 return@launch
             }
 
-            // 2. Si no está en Room, intentar de la API
             repository.getPredioById(predioId)
                 .onSuccess { predio ->
                     numeroContrato  = predio.numeroContrato
@@ -88,7 +81,6 @@ class EditarViewModel(
                     usuario         = predio.usuario
                     direccion       = predio.direccion ?: ""
                     estado          = predio.estado
-                    // Cargar fotos existentes
                     repository.getFotosByPredio(predioId).onSuccess { fotos ->
                         fotoPredioUrl    = fotos.lastOrNull { it.tipo == "predio" }?.url
                         fotoAcometidaUrl = fotos.lastOrNull { it.tipo == "acometida" }?.url
@@ -131,7 +123,6 @@ class EditarViewModel(
                 )
             ).onSuccess {
                 val ctx = getApplication<Application>()
-                // Subir fotos nuevas reemplazando las anteriores
                 listOf(
                     fotoPredioUriNueva    to "predio",
                     fotoAcometidaUriNueva to "acometida",

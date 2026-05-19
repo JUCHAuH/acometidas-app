@@ -1,16 +1,13 @@
 package com.jucha.acometidasapp.ui.nuevo
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
-import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
-import com.yalantis.ucrop.UCrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,53 +63,19 @@ fun NuevoScreen(
     var pendingTipo       by remember { mutableStateOf("") }
     var mostrarDialogFoto by remember { mutableStateOf(false) }
 
-    // Se define primero para que cameraLauncher pueda referenciarlo
-    val cropLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.let { data ->
-                UCrop.getOutput(data)?.let { croppedUri ->
-                    vm.setFoto(pendingTipo, croppedUri)
-                }
-            }
-        }
-    }
-
     val cameraLauncher = rememberLauncherForActivityResult(TakePicture()) { success ->
-        if (success) {
-            val input = pendingUri ?: return@rememberLauncherForActivityResult
-            val output = crearUriTemporal(context)
-            val (ratioW, ratioH) = when (pendingTipo) {
-                "predio" -> 503f to 269f
-                else     -> 255f to 184f  // acometida y medidor
-            }
-            cropLauncher.launch(
-                UCrop.of(input, output)
-                    .withAspectRatio(ratioW, ratioH)
-                    .withMaxResultSize(1500, 1500)
-                    .getIntent(context)
-            )
+        if (success && pendingUri != null) {
+            vm.setFoto(pendingTipo, pendingUri!!)
         }
         pendingUri = null
     }
 
-    val permLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
-        if (granted) pendingUri?.let { cameraLauncher.launch(it) }
+    val galleryLauncher = rememberLauncherForActivityResult(GetContent()) { uri ->
+        uri?.let { vm.setFoto(pendingTipo, it) }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(GetContent()) { uri ->
-        uri?.let { selected ->
-            val output = crearUriTemporal(context)
-            val (ratioW, ratioH) = when (pendingTipo) {
-                "predio" -> 503f to 269f
-                else     -> 255f to 184f
-            }
-            cropLauncher.launch(
-                UCrop.of(selected, output)
-                    .withAspectRatio(ratioW, ratioH)
-                    .withMaxResultSize(1500, 1500)
-                    .getIntent(context)
-            )
-        }
+    val permLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
+        if (granted) pendingUri?.let { cameraLauncher.launch(it) }
     }
 
     fun abrirCamara(tipo: String) {

@@ -1,5 +1,6 @@
 package com.jucha.acometidasapp.ui.main
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -9,6 +10,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -20,6 +23,8 @@ import androidx.navigation.compose.rememberNavController
 import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.navigation.Routes
 import com.jucha.acometidasapp.core.navigation.SesionUsuario
+import com.jucha.acometidasapp.core.sync.ConnectivityObserver
+import com.jucha.acometidasapp.core.ui.ConnectivityIndicator
 import com.jucha.acometidasapp.ui.editar.EditarScreen
 import com.jucha.acometidasapp.ui.exportar.ExportarScreen
 import com.jucha.acometidasapp.ui.nuevo.NuevoScreen
@@ -54,6 +59,39 @@ fun MainScreen(navController: NavController) {
 
     val nuevoVm: NuevoViewModel = viewModel()
     var pendingRoute by remember { mutableStateOf<String?>(null) }
+
+    // Conectividad
+    val context = LocalContext.current
+    val connectivityObserver = remember { ConnectivityObserver(context) }
+    val isOnline by connectivityObserver.isOnline.collectAsStateWithLifecycle(initialValue = true)
+    var mostrarDialogoSinInternet by remember { mutableStateOf(false) }
+    var wasOnline by remember { mutableStateOf(true) }
+
+    LaunchedEffect(isOnline) {
+        if (!isOnline && wasOnline) {
+            mostrarDialogoSinInternet = true
+        }
+        wasOnline = isOnline
+    }
+
+    if (mostrarDialogoSinInternet) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoSinInternet = false },
+            title = { Text("Modo sin conexión") },
+            text  = {
+                Text(
+                    "La app está funcionando correctamente sin internet. " +
+                    "Puedes crear predios normalmente. Los cambios se sincronizarán " +
+                    "cuando recuperes la conexión."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarDialogoSinInternet = false }) {
+                    Text("Aceptar")
+                }
+            }
+        )
+    }
 
     if (pendingRoute != null) {
         AlertDialog(
@@ -108,27 +146,30 @@ fun MainScreen(navController: NavController) {
             }
         }
     ) { innerPadding ->
-        NavHost(
-            navController    = innerNavController,
-            startDestination = Routes.Tab.PREDIOS,
-            modifier         = Modifier.padding(innerPadding)
-        ) {
-            composable(Routes.Tab.PREDIOS) {
-                PrediosScreen(
-                    proyectoId = proyectoId,
-                    navController = innerNavController,
-                    outerNavController = navController
-                )
-            }
-            composable(Routes.Tab.NUEVO) {
-                NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
-            }
-            composable(Routes.Tab.EXPORTAR) {
-                ExportarScreen(proyectoId = proyectoId)
-            }
-            composable(Routes.EDITAR_PREDIO) { backStackEntry ->
-                val predioId = backStackEntry.arguments?.getString("predioId") ?: ""
-                EditarScreen(predioId = predioId, navController = innerNavController)
+        Column(modifier = Modifier.padding(innerPadding)) {
+            ConnectivityIndicator()
+            NavHost(
+                navController    = innerNavController,
+                startDestination = Routes.Tab.PREDIOS,
+                modifier         = Modifier.weight(1f)
+            ) {
+                composable(Routes.Tab.PREDIOS) {
+                    PrediosScreen(
+                        proyectoId = proyectoId,
+                        navController = innerNavController,
+                        outerNavController = navController
+                    )
+                }
+                composable(Routes.Tab.NUEVO) {
+                    NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
+                }
+                composable(Routes.Tab.EXPORTAR) {
+                    ExportarScreen(proyectoId = proyectoId)
+                }
+                composable(Routes.EDITAR_PREDIO) { backStackEntry ->
+                    val predioId = backStackEntry.arguments?.getString("predioId") ?: ""
+                    EditarScreen(predioId = predioId, navController = innerNavController)
+                }
             }
         }
     }

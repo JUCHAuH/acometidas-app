@@ -104,6 +104,9 @@ dependencies {
         exclude(group = "org.bouncycastle")
     }
 
+    // OpenCV para procesamiento de imágenes
+    implementation("org.opencv:opencv-android:4.8.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     implementation("androidx.compose.material:material-icons-extended")

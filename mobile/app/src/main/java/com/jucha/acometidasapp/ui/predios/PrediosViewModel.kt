@@ -57,7 +57,7 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
                 createdAt = null,
                 updatedAt = null
             )
-        } + prediosRemotos).distinctBy { it.id }
+        } + prediosRemotos).distinctBy { it.id }.sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
     }
 
     fun setProyectoId(id: String) {
