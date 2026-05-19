@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.graphics.Bitmap
+import androidx.core.content.FileProvider
+import com.jucha.acometidasapp.core.image.ImageProcessor
 import com.jucha.acometidasapp.core.sync.ConnectivityObserver
 import com.jucha.acometidasapp.core.sync.SyncManager
 import com.jucha.acometidasapp.core.sync.SyncState
@@ -24,6 +27,8 @@ import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 sealed class NuevoSaveState {
     object Idle : NuevoSaveState()
@@ -103,7 +108,6 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                 proyectoId      = proyectoId
             )
         ).onSuccess { predio ->
-            // Subir cada foto al Storage y registrarla en la tabla fotos
             val ctx = getApplication<Application>()
             listOf(
                 fotoPredioUri    to "predio",
@@ -112,7 +116,14 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             ).forEach { (uri, tipo) ->
                 if (uri != null) {
                     Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
-                    repository.uploadFoto(ctx, uri, predio.id, tipo)
+
+                    val uriParaSubir = if (tipo == "acometida") {
+                        procesarFotoAcometida(ctx, uri) ?: uri
+                    } else {
+                        uri
+                    }
+
+                    repository.uploadFoto(ctx, uriParaSubir, predio.id, tipo)
                         .onSuccess { url ->
                             Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
                             repository.createFoto(
@@ -226,6 +237,20 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             _saveState.value = NuevoSaveState.Error(
                 "Error al guardar localmente: ${e.message ?: "Error desconocido"}"
             )
+        }
+    }
+
+    private suspend fun procesarFotoAcometida(ctx: Application, uri: Uri): Uri? {
+        val bitmap = ImageProcessor.applyScanFilter(ctx, uri) ?: return null
+        val tempFile = File(ctx.cacheDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
+        return try {
+            FileOutputStream(tempFile).use { fos ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
+            }
+            FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", tempFile)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

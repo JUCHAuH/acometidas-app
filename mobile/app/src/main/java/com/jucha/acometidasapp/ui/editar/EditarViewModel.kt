@@ -11,6 +11,9 @@ import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.graphics.Bitmap
+import androidx.core.content.FileProvider
+import com.jucha.acometidasapp.core.image.ImageProcessor
 import com.jucha.acometidasapp.data.model.CreateFotoDto
 import com.jucha.acometidasapp.data.model.UpdatePredioDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
@@ -19,6 +22,8 @@ import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 sealed class EditarSaveState {
     object Idle    : EditarSaveState()
@@ -130,7 +135,14 @@ class EditarViewModel(
                 ).forEach { (uri, tipo) ->
                     if (uri != null) {
                         repository.deleteFotosByPredioTipo(predioId, tipo)
-                        repository.uploadFoto(ctx, uri, predioId, tipo)
+
+                        val uriParaSubir = if (tipo == "acometida") {
+                            procesarFotoAcometida(ctx, uri) ?: uri
+                        } else {
+                            uri
+                        }
+
+                        repository.uploadFoto(ctx, uriParaSubir, predioId, tipo)
                             .onSuccess { url ->
                                 repository.createFoto(
                                     CreateFotoDto(predioId = predioId, tipo = tipo, url = url)
@@ -142,6 +154,20 @@ class EditarViewModel(
             }.onFailure { e ->
                 _saveState.value = EditarSaveState.Error(e.message ?: "Error al guardar")
             }
+        }
+    }
+
+    private suspend fun procesarFotoAcometida(ctx: Application, uri: Uri): Uri? {
+        val bitmap = ImageProcessor.applyScanFilter(ctx, uri) ?: return null
+        val tempFile = File(ctx.cacheDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
+        return try {
+            FileOutputStream(tempFile).use { fos ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
+            }
+            FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", tempFile)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
