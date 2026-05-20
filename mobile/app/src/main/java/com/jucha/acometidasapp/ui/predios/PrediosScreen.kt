@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.jucha.acometidasapp.core.navigation.ProyectoSesion
 import com.jucha.acometidasapp.core.sync.SyncManager
 import com.jucha.acometidasapp.core.theme.AzulAgua
@@ -56,6 +59,16 @@ fun PrediosScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Recargar automáticamente cuando la sincronización termina
+    val syncWorkInfos by WorkManager.getInstance(context)
+        .getWorkInfosForUniqueWorkFlow(SyncManager.SYNC_PREDIOS_IMMEDIATE_WORK)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    LaunchedEffect(syncWorkInfos) {
+        if (syncWorkInfos.any { it.state == WorkInfo.State.SUCCEEDED }) {
+            vm.cargarPredios()
+        }
     }
 
     Scaffold(
@@ -107,10 +120,17 @@ fun PrediosScreen(
 
             is PrediosUiState.Error -> {
                 Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.message, color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(16.dp))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Text(
+                            state.message,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
                         Button(onClick = { vm.cargarPredios() }) { Text("Reintentar") }
                     }
                 }

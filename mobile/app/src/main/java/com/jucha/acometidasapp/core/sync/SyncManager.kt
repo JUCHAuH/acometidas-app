@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 object SyncManager {
 
     private const val SYNC_PREDIOS_WORK_NAME = "sync_predios_work"
-    private const val SYNC_PREDIOS_IMMEDIATE_WORK = "sync_predios_immediate"
+    const val SYNC_PREDIOS_IMMEDIATE_WORK = "sync_predios_immediate"
     private const val SYNC_INTERVAL_MINUTES = 15L  // Para testing, usar 15 min; en prod usar valores mayores
 
     fun enqueueSyncPredios(context: Context) {
@@ -30,15 +30,17 @@ object SyncManager {
             TimeUnit.MINUTES
         )
             .setConstraints(constraints)
-            .setInitialDelay(15, TimeUnit.MINUTES)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             SYNC_PREDIOS_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,  // Si ya existe, mantenerla
+            ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
         )
         Log.d("SyncManager", "enqueueSyncPredios: Sincronización periódica encolada exitosamente")
+
+        // Ejecutar inmediatamente la primera sincronización
+        executeSyncNow(context)
     }
 
     fun executeSyncNow(context: Context) {

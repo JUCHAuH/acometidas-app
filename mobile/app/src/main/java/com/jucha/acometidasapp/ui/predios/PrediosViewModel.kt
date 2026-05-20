@@ -42,7 +42,7 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
         prediosLocales: List<PredioLocalEntity>,
         prediosRemotos: List<PredioDto>
     ): List<PredioDto> {
-        return (prediosLocales.map { local ->
+        val localDtos = prediosLocales.map { local ->
             PredioDto(
                 id = local.remoteId ?: local.id,
                 numeroParte = null,
@@ -57,7 +57,12 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
                 createdAt = null,
                 updatedAt = null
             )
-        } + prediosRemotos).distinctBy { it.id }.sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
+        }
+        // Remotos primero: tienen datos actualizados y ganan el distinctBy.
+        // Locales complementan solo cuando no hay equivalente remoto (predios PENDING sin remoteId).
+        return (prediosRemotos + localDtos)
+            .distinctBy { it.id }
+            .sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
     }
 
     fun setProyectoId(id: String) {
@@ -89,16 +94,25 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
                     }
                     .onFailure { error ->
                         Log.e("PrediosVM", "Error cargando predios remotos: ${error.message}")
-                        // Aunque falle la API, mostrar predios locales
-                        _uiState.value = if (prediosLocales.isNotEmpty()) {
-                            PrediosUiState.Success(
+                        if (prediosLocales.isNotEmpty()) {
+                            _uiState.value = PrediosUiState.Success(
                                 combinarPredios(prediosLocales, emptyList()),
                                 prediosLocales
                             )
                         } else {
-                            PrediosUiState.Error(
+                            val esErrorRed = error.message?.contains("Unable to resolve host") == true ||
+                                error.message?.contains("Network") == true ||
+                                error.message?.contains("No address associated") == true ||
+                                error.message?.contains("failed to connect") == true ||
+                                error.message?.contains("timeout") == true
+                            val mensaje = if (esErrorRed) {
+                                "Sin conexión a internet.\n\nEstás en modo sin conexión. Puedes crear " +
+                                "predios normalmente, pero no es posible conectar con la base de datos.\n\n" +
+                                "Intenta nuevamente cuando recuperes la conexión."
+                            } else {
                                 error.message ?: "Error al cargar los predios"
-                            )
+                            }
+                            _uiState.value = PrediosUiState.Error(mensaje)
                         }
                     }
             } catch (e: Exception) {
@@ -111,44 +125,38 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
     fun eliminarPredio(id: String) {
         viewModelScope.launch {
             try {
-                // 1. Buscar el predio por ID o remoteId
                 val predioLocal = _prediosLocales.value.find { it.id == id || it.remoteId == id }
-                if (predioLocal == null) {
-                    Log.e("PrediosVM", "Predio no encontrado: $id")
-                    return@launch
-                }
 
-                val idLocal = predioLocal.id
-                val remoteId = predioLocal.remoteId
-                Log.d("PrediosVM", "Eliminando predio - ID local: $idLocal, remoteId: $remoteId, búsqueda: $id")
-
-                // 2. Remover inmediatamente del estado actual (actualizar UI)
+                // Quitar de la UI inmediatamente
                 if (_uiState.value is PrediosUiState.Success) {
                     val estado = _uiState.value as PrediosUiState.Success
-                    val prediosFiltrados = estado.predios.filter {
-                        it.id != id && it.id != idLocal && it.id != remoteId
-                    }
-                    _uiState.value = PrediosUiState.Success(prediosFiltrados, estado.prediosLocales.filter { it.id != idLocal })
-                    Log.d("PrediosVM", "UI actualizada - predios restantes: ${prediosFiltrados.size}")
+                    _uiState.value = PrediosUiState.Success(
+                        estado.predios.filter { it.id != id },
+                        estado.prediosLocales.filter { it.id != id && it.remoteId != id }
+                    )
                 }
 
-                // 3. Borrar de Room
-                db.predioLocalDao().deleteById(idLocal)
-                Log.d("PrediosVM", "Predio eliminado de Room: $idLocal")
+                if (predioLocal != null) {
+                    val idLocal = predioLocal.id
+                    val remoteId = predioLocal.remoteId
+                    Log.d("PrediosVM", "Eliminando predio local: $idLocal, remoteId: $remoteId")
 
-                // 4. Borrar fotos y archivos
-                repository.deleteStorageFilesForPredio(idLocal)
-                repository.deleteAllFotosByPredio(idLocal)
+                    db.predioLocalDao().deleteById(idLocal)
+                    repository.deleteStorageFilesForPredio(idLocal)
+                    repository.deleteAllFotosByPredio(idLocal)
 
-                // 5. Borrar del servidor
-                val idParaBorrar = remoteId ?: idLocal
-                repository.deletePredio(idParaBorrar)
-                    .onSuccess {
-                        Log.d("PrediosVM", "Predio eliminado del servidor: $idParaBorrar")
-                    }
-                    .onFailure { e ->
-                        Log.e("PrediosVM", "Error eliminando del servidor: ${e.message}")
-                    }
+                    val idParaBorrar = remoteId ?: idLocal
+                    repository.deletePredio(idParaBorrar)
+                        .onSuccess { Log.d("PrediosVM", "Predio eliminado del servidor: $idParaBorrar") }
+                        .onFailure { e -> Log.e("PrediosVM", "Error eliminando del servidor: ${e.message}") }
+                } else {
+                    // Predio solo remoto (creado con conexión, sin copia local)
+                    Log.d("PrediosVM", "Eliminando predio solo remoto: $id")
+                    repository.deleteAllFotosByPredio(id)
+                    repository.deletePredio(id)
+                        .onSuccess { Log.d("PrediosVM", "Predio remoto eliminado: $id") }
+                        .onFailure { e -> Log.e("PrediosVM", "Error eliminando predio remoto: ${e.message}") }
+                }
 
             } catch (e: Exception) {
                 Log.e("PrediosVM", "Error en eliminarPredio: ${e.message}", e)

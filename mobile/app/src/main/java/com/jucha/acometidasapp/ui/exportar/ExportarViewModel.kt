@@ -66,11 +66,22 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repository.getPrediosByProyecto(proyectoId)
                 .onSuccess { predios ->
-                    _allPredios.value = predios
-                    _uiState.value = ExportarUiState.Ready(predios)
+                    val prediosOrdenados = predios.sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
+                    _allPredios.value = prediosOrdenados
+                    _uiState.value = ExportarUiState.Ready(prediosOrdenados)
                 }
                 .onFailure { e ->
-                    _uiState.value = ExportarUiState.Error(e.message ?: "Error al cargar predios")
+                    val mensajeAmigable = if (e.message?.contains("Unable to resolve host") == true ||
+                                              e.message?.contains("Network") == true ||
+                                              e.message?.contains("No address associated") == true) {
+                        "Sin conexión a internet.\n\n" +
+                        "Estás en modo sin conexión. Puedes crear predios normalmente, " +
+                        "pero no es posible conectar con la base de datos.\n\n" +
+                        "Intenta nuevamente cuando recuperes la conexión."
+                    } else {
+                        e.message ?: "Error al cargar predios"
+                    }
+                    _uiState.value = ExportarUiState.Error(mensajeAmigable)
                 }
         }
     }
@@ -100,7 +111,9 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
         val state = _uiState.value as? ExportarUiState.Ready ?: return
         if (state.seleccionados.isEmpty()) return
 
-        val prediosSeleccionados = state.predios.filter { it.id in state.seleccionados }
+        val prediosSeleccionados = state.predios
+            .filter { it.id in state.seleccionados }
+            .sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
         _uiState.value = ExportarUiState.Generating
 
         viewModelScope.launch {
@@ -159,7 +172,9 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
     fun exportarPng() {
         val state = _uiState.value as? ExportarUiState.Ready ?: return
         if (state.seleccionados.isEmpty()) return
-        val prediosSeleccionados = state.predios.filter { it.id in state.seleccionados }
+        val prediosSeleccionados = state.predios
+            .filter { it.id in state.seleccionados }
+            .sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
         _uiState.value = ExportarUiState.Generating
         viewModelScope.launch {
             try {
@@ -208,8 +223,9 @@ class ExportarViewModel(app: Application) : AndroidViewModel(app) {
     fun exportarLista(predios: List<PredioDto>, barrio: String?) {
         viewModelScope.launch {
             try {
+                val prediosOrdenados = predios.sortedBy { it.codigoPredio.toLongOrNull() ?: 0L }
                 val archivo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    pdfService.generarListaPdf(predios, barrio)
+                    pdfService.generarListaPdf(prediosOrdenados, barrio)
                 }
                 val uri = FileProvider.getUriForFile(
                     getApplication(),

@@ -22,4 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AcometidasApp"
 include(":app")
- 
+include(":openCV")

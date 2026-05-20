@@ -147,13 +147,19 @@ class SyncPrediosWorker(
                         }
                     }
 
-                    // 6. Actualizar estado local a SYNCED
-                    Log.d(TAG, "Actualizando estado local a SYNCED para predio: ${predio.id}")
-                    predioDao.updateSyncStateWithRemoteId(
-                        predio.id,
-                        SyncState.SYNCED.name,
-                        predioRemoto.id
+                    // 6. Actualizar predio local con datos del remoto (incluyendo codigoPredio)
+                    Log.d(TAG, "Actualizando predio local con datos remotos...")
+                    val predioActualizado = predio.copy(
+                        remoteId = predioRemoto.id,
+                        codigoPredio = predioRemoto.codigoPredio,  // Sincronizar código del remoto
+                        numeroContrato = predioRemoto.numeroContrato ?: predio.numeroContrato,
+                        usuario = predioRemoto.usuario,
+                        direccion = predioRemoto.direccion,
+                        estado = predioRemoto.estado ?: predio.estado,
+                        syncState = SyncState.SYNCED.name
                     )
+                    predioDao.update(predioActualizado)
+                    Log.d(TAG, "Predio actualizado localmente: id=${predio.id}, remoteId=${predioRemoto.id}, codigoPredio=${predioRemoto.codigoPredio}")
 
                     Log.d(TAG, "Predio sincronizado exitosamente: ${predio.id}")
 

@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudDone
@@ -23,46 +24,34 @@ import com.jucha.acometidasapp.core.sync.ConnectivityObserver
 fun ConnectivityIndicator() {
     val context = LocalContext.current
     val connectivityObserver = remember { ConnectivityObserver(context) }
-    val isOnline by connectivityObserver.isOnline.collectAsStateWithLifecycle(initialValue = true)
+    val isOnline by connectivityObserver.isOnline.collectAsStateWithLifecycle(initialValue = null)
 
-    val backgroundColor = if (isOnline) Color(0xFF22C55E) else Color(0xFFEF4444)
-    val icon = if (isOnline) Icons.Outlined.CloudDone else Icons.Outlined.CloudOff
-    val label = if (isOnline) "Conectado" else "Sin conexión"
-
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Surface(
+    if (isOnline != null) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = backgroundColor,
-            tonalElevation = 2.dp
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
         ) {
-            Row(
+            // Punto indicador
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-            }
+                    .size(8.dp)
+                    .background(
+                        color = if (isOnline!!) Color(0xFF22C55E) else Color(0xFFEF4444),
+                        shape = CircleShape
+                    )
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            // Texto discreto
+            Text(
+                text = if (isOnline!!) "Activo" else "Sin conexión",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isOnline!!) Color(0xFF22C55E) else Color(0xFFEF4444),
+                fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+            )
         }
     }
 }
+

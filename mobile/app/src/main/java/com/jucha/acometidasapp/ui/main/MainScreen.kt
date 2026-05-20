@@ -2,6 +2,8 @@ package com.jucha.acometidasapp.ui.main
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -146,31 +148,34 @@ fun MainScreen(navController: NavController) {
             }
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
-            ConnectivityIndicator()
-            NavHost(
-                navController    = innerNavController,
-                startDestination = Routes.Tab.PREDIOS,
-                modifier         = Modifier.weight(1f)
-            ) {
-                composable(Routes.Tab.PREDIOS) {
-                    PrediosScreen(
-                        proyectoId = proyectoId,
-                        navController = innerNavController,
-                        outerNavController = navController
-                    )
-                }
-                composable(Routes.Tab.NUEVO) {
-                    NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
-                }
-                composable(Routes.Tab.EXPORTAR) {
-                    ExportarScreen(proyectoId = proyectoId)
-                }
-                composable(Routes.EDITAR_PREDIO) { backStackEntry ->
-                    val predioId = backStackEntry.arguments?.getString("predioId") ?: ""
-                    EditarScreen(predioId = predioId, navController = innerNavController)
+        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                NavHost(
+                    navController    = innerNavController,
+                    startDestination = Routes.Tab.PREDIOS,
+                    modifier         = Modifier.weight(1f)
+                ) {
+                    composable(Routes.Tab.PREDIOS) {
+                        PrediosScreen(
+                            proyectoId = proyectoId,
+                            navController = innerNavController,
+                            outerNavController = navController
+                        )
+                    }
+                    composable(Routes.Tab.NUEVO) {
+                        NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
+                    }
+                    composable(Routes.Tab.EXPORTAR) {
+                        ExportarScreen(proyectoId = proyectoId)
+                    }
+                    composable(Routes.EDITAR_PREDIO) { backStackEntry ->
+                        val predioId = backStackEntry.arguments?.getString("predioId") ?: ""
+                        EditarScreen(predioId = predioId, navController = innerNavController)
+                    }
                 }
             }
+            // Indicador de conexión en esquina superior derecha
+            ConnectivityIndicator()
         }
     }
 }

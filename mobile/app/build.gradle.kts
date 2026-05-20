@@ -105,7 +105,7 @@ dependencies {
     }
 
     // OpenCV para procesamiento de imágenes
-    implementation("org.opencv:opencv-android:4.8.0")
+    implementation(project(":openCV"))
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

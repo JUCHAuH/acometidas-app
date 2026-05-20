@@ -28,6 +28,16 @@ class ConnectivityObserver(private val context: Context) {
             }
         }
 
+        // Emitir estado inicial correctamente (crucial para bug fix)
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = if (activeNetwork != null) {
+            connectivityManager.getNetworkCapabilities(activeNetwork)
+        } else {
+            null
+        }
+        val isInitiallyOnline = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ?: false
+        trySend(isInitiallyOnline)
+
         connectivityManager.registerDefaultNetworkCallback(callback)
 
         awaitClose {
@@ -43,3 +53,4 @@ class ConnectivityObserver(private val context: Context) {
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 }
+

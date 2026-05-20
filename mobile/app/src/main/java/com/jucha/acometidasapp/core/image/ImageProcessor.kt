@@ -40,40 +40,105 @@ object ImageProcessor {
             val mat = Mat()
             Utils.bitmapToMat(bitmap, mat)
 
-            // Convertir a escala de grises
-            val gray = Mat()
-            Imgproc.cvtColor(mat, gray, Imgproc.COLOR_RGB2GRAY)
+            // Convertir de RGB a BGR
+            Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2BGR)
 
-            // Aplicar CLAHE para mejorar contraste localmente
-            val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
-            val claheResult = Mat()
-            clahe.apply(gray, claheResult)
+            // 1. Aplicar Bilateral Filter para reducir ruido mientras preserva bordes
+            val denoised = Mat()
+            Imgproc.bilateralFilter(mat, denoised, 9, 75.0, 75.0)
 
-            // Aumentar brillo y contraste
-            val result = Mat()
-            claheResult.convertTo(result, -1, 1.3, 30.0)
+            // 2. Convertir a HSV
+            val hsv = Mat()
+            Imgproc.cvtColor(denoised, hsv, Imgproc.COLOR_BGR2HSV)
 
-            // Binarización adaptativa para mejorar legibilidad del texto
-            val binarized = Mat()
-            Imgproc.adaptiveThreshold(
-                result, binarized, 255.0,
-                Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
-                Imgproc.THRESH_BINARY,
-                11, 2.0
-            )
+            val hsvChannels = ArrayList<Mat>()
+            Core.split(hsv, hsvChannels)
+            val h = hsvChannels[0]
+            val s = hsvChannels[1]
+            val v = hsvChannels[2].clone()
 
-            // Convertir de vuelta a bitmap
-            val outputBitmap = Bitmap.createBitmap(binarized.cols(), binarized.rows(), Bitmap.Config.RGB_565)
-            Utils.matToBitmap(binarized, outputBitmap)
+            // 3. WHITENING SELECTIVO - Aumentar brillo de áreas claras (fondo)
+            // Para píxeles con V > 150 (áreas claras), aumentar hacia 255 (más blanco)
+            val vWhitened = Mat()
+            v.convertTo(vWhitened, -1, 1.0, 0.0)
 
-            // Liberar recursos
+            // Aplicar función de whitening: para V > 150, aumentar más agresivamente
+            val whitenKernel = Mat(v.rows(), v.cols(), CvType.CV_8U)
+            val data = ByteArray(v.rows() * v.cols())
+            v.get(0, 0, data)
+
+            for (i in data.indices) {
+                val pixel = data[i].toInt() and 0xFF
+                data[i] = when {
+                    pixel > 180 -> 255.toByte() // Áreas muy claras -> blanco puro
+                    pixel > 150 -> (pixel + (255 - pixel) * 0.5).toInt().toByte() // Áreas claras -> más blancas
+                    else -> pixel.toByte() // Áreas oscuras -> sin cambio
+                }
+            }
+            whitenKernel.put(0, 0, data)
+
+            // 4. Aplicar morphological opening para limpiar manchas pequeñas
+            val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(3.0, 3.0))
+            val vCleaned = Mat()
+            Imgproc.morphologyEx(whitenKernel, vCleaned, Imgproc.MORPH_OPEN, kernel)
+            kernel.release()
+
+            // 5. Aplicar CLAHE al canal V limpiado - realza contraste
+            val clahe = Imgproc.createCLAHE(3.5, Size(15.0, 15.0))
+            val vEnhanced = Mat()
+            clahe.apply(vCleaned, vEnhanced)
+
+            // 6. Aumentar saturación para colores más vibrantes
+            val sMult = Mat()
+            s.convertTo(sMult, -1, 1.5, 0.0) // 50% más saturación
+
+            // 7. Aplicar Unsharp Mask para nitidez
+            val blurred = Mat()
+            Imgproc.GaussianBlur(vEnhanced, blurred, Size(5.0, 5.0), 1.0)
+            val sharpened = Mat()
+            Core.addWeighted(vEnhanced, 1.8, blurred, -0.8, 0.0, sharpened)
+
+            // 8. Fusionar canales HSV
+            val hsvResult = Mat()
+            val enhancedChannels = listOf(h, sMult, sharpened)
+            Core.merge(enhancedChannels, hsvResult)
+
+            // 9. Convertir de vuelta a BGR
+            val bgr = Mat()
+            Imgproc.cvtColor(hsvResult, bgr, Imgproc.COLOR_HSV2BGR)
+
+            // 10. Convertir a RGB
+            val outputMat = Mat()
+            Imgproc.cvtColor(bgr, outputMat, Imgproc.COLOR_BGR2RGB)
+
+            // 11. Aumentar contraste final
+            val contrasted = Mat()
+            outputMat.convertTo(contrasted, -1, 1.2, 10.0)
+
+            // 12. Crear Bitmap
+            val outputBitmap = Bitmap.createBitmap(contrasted.cols(), contrasted.rows(), Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(contrasted, outputBitmap)
+
+            // Liberar memoria
             mat.release()
-            gray.release()
-            claheResult.release()
-            result.release()
-            binarized.release()
+            denoised.release()
+            hsv.release()
+            h.release()
+            s.release()
+            v.release()
+            whitenKernel.release()
+            vWhitened.release()
+            vCleaned.release()
+            vEnhanced.release()
+            sMult.release()
+            blurred.release()
+            sharpened.release()
+            hsvResult.release()
+            bgr.release()
+            outputMat.release()
+            contrasted.release()
 
-            Log.d("ImageProcessor", "Scan filter applied successfully")
+            Log.d("ImageProcessor", "Professional scan filter applied - fondo ultra blanco, texto nítido")
             outputBitmap
         } catch (e: Exception) {
             Log.e("ImageProcessor", "Error applying scan filter: ${e.message}", e)
@@ -93,4 +158,3 @@ object ImageProcessor {
         }
     }
 }
-

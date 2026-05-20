@@ -204,8 +204,15 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         Log.d("NuevoVM", "Guardando foto local tipo=$tipo")
 
+                        // Aplicar filtro a foto de acometida (igual que online)
+                        val uriParaProcesar = if (tipo == "acometida") {
+                            procesarFotoAcometida(ctx, uri) ?: uri
+                        } else {
+                            uri
+                        }
+
                         // Guardar archivo en ExternalFilesDir
-                        val fotoFile = fileUtil.saveFotoLocally(ctx, uri, predioId, tipo)
+                        val fotoFile = fileUtil.saveFotoLocally(ctx, uriParaProcesar, predioId, tipo)
                         Log.d("NuevoVM", "Foto guardada en: ${fotoFile.absolutePath}")
 
                         // Crear registro en foto_local
@@ -242,7 +249,8 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun procesarFotoAcometida(ctx: Application, uri: Uri): Uri? {
         val bitmap = ImageProcessor.applyScanFilter(ctx, uri) ?: return null
-        val tempFile = File(ctx.cacheDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
+        val photosDir = File(ctx.cacheDir, "photos").also { it.mkdirs() }
+        val tempFile = File(photosDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
         return try {
             FileOutputStream(tempFile).use { fos ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)

@@ -159,7 +159,8 @@ class EditarViewModel(
 
     private suspend fun procesarFotoAcometida(ctx: Application, uri: Uri): Uri? {
         val bitmap = ImageProcessor.applyScanFilter(ctx, uri) ?: return null
-        val tempFile = File(ctx.cacheDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
+        val photosDir = File(ctx.cacheDir, "photos").also { it.mkdirs() }
+        val tempFile = File(photosDir, "acometida_filtered_${System.currentTimeMillis()}.jpg")
         return try {
             FileOutputStream(tempFile).use { fos ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
