@@ -27,3 +27,13 @@ backend/.env
 # ─── PDF y temporales ───────────────────────────────────
 *.pdf
 *.tmp
+
+# NDK / C++ build artifacts and logs
+**/intermediates/
+**/obj/
+**/.cxx/
+**/cxx/
+**/externalNativeBuild/
+**/build/**/logs/
+**/build/**/metadata_generation_record.json
+**/metadata_generation_record.json
