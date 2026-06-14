@@ -145,6 +145,15 @@ SUPABASE_KEY=<tu-api-key>
 
 Estas claves se inyectan automáticamente en `BuildConfig` durante la compilación.
 
+### SDK de OpenCV
+
+El módulo `:openCV` (usado para el filtro de escaneo de fotos) requiere las librerías nativas del **OpenCV Android SDK**, que no se incluyen en el repositorio por su tamaño:
+
+1. Descarga el [OpenCV Android SDK](https://opencv.org/releases/) (versión 4.x).
+2. Copia la carpeta `native/` del SDK descargado dentro de `mobile/openCV/native/`.
+
+Sin este paso, el módulo `:openCV` no compilará.
+
 ## Compilación y ejecución
 
 ```bash

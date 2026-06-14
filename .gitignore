@@ -9,6 +9,12 @@ mobile/captures/
 mobile/.externalNativeBuild/
 mobile/.cxx/
 
+# ─── OpenCV Android SDK (vendorizado localmente) ────────
+# build/ se regenera al compilar; native/ es el SDK pesado (~900MB)
+# que se descarga aparte (ver README, sección OpenCV).
+mobile/openCV/build/
+mobile/openCV/native/
+
 # ─── Secrets ────────────────────────────────────────────
 local.properties
 *.env
