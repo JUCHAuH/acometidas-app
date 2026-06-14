@@ -31,11 +31,17 @@ object PdfCoords {
     const val DIRECCION_X       = 65f
     const val DIRECCION_Y       = 817f
 
-    // Foto 1 — caja grande 
+    // Foto 1 — caja grande
     const val FOTO1_X           = 33f
     const val FOTO1_Y           = 602f
     const val FOTO1_WIDTH       = 546f
     const val FOTO1_HEIGHT      = 186f
+
+    // Foto 1B — segunda foto (agua potable, lado derecho)
+    const val FOTO1B_X          = 308f
+    const val FOTO1B_Y          = 602f
+    const val FOTO1B_WIDTH      = 270f
+    const val FOTO1B_HEIGHT     = 186f
 
     // Foto 2 — caja izquierda 
     const val FOTO2_X           = 33f

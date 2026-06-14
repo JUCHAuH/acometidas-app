@@ -198,7 +198,7 @@ fun NuevoScreen(
             item {
                 FormCard {
                     Text(
-                        if (ProyectoSesion.tipo == "alcantarillado")
+                        if (ProyectoSesion.tipo.startsWith("alcantarillado"))
                             "PARTE DE ACOMETIDA A RED DE ALCANTARILLADO"
                         else
                             "PARTE DE ACOMETIDA A RED DE AGUA POTABLE",
@@ -239,12 +239,33 @@ fun NuevoScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    FotoBox(
-                        uri    = vm.fotoPredioUri,
-                        label  = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
-                        height = 220.dp,
-                        onClick = { pendingTipo = "predio"; mostrarDialogFoto = true }
-                    )
+                    if (ProyectoSesion.tipo == "agua_potable" || ProyectoSesion.tipo == "alcantarillado_autoayuda") {
+                        // Para agua potable y alcantarillado autoayuda: 2 fotos grandes arriba
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FotoBox(
+                                uri    = vm.fotoPredioUri,
+                                label  = "VISTA DEL PREDIO",
+                                height = 180.dp,
+                                onClick = { pendingTipo = "predio"; mostrarDialogFoto = true },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FotoBox(
+                                uri    = vm.fotoPredio2Uri,
+                                label  = "UBICACIÓN DE LA ACOMETIDA",
+                                height = 180.dp,
+                                onClick = { pendingTipo = "predio2"; mostrarDialogFoto = true },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else {
+                        // Para alcantarillado normal: 1 foto grande
+                        FotoBox(
+                            uri    = vm.fotoPredioUri,
+                            label  = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
+                            height = 220.dp,
+                            onClick = { pendingTipo = "predio"; mostrarDialogFoto = true }
+                        )
+                    }
                 }
             }
 
@@ -261,7 +282,7 @@ fun NuevoScreen(
                         )
                         FotoBox(
                             uri     = vm.fotoMedidorUri,
-                            label   = if (ProyectoSesion.tipo == "alcantarillado")
+                            label   = if (ProyectoSesion.tipo.startsWith("alcantarillado"))
                                           "ACOMETIDA DE ALCANTARILLADO"
                                       else
                                           "MEDIDOR INSTALADO",

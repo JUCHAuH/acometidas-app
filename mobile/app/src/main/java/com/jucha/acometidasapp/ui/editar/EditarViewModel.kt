@@ -2,6 +2,7 @@ package com.jucha.acometidasapp.ui.editar
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,6 +22,9 @@ import com.jucha.acometidasapp.data.remote.SupabaseClient
 import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -51,10 +55,12 @@ class EditarViewModel(
     var estado          by mutableStateOf("pendiente")
 
     var fotoPredioUrl     by mutableStateOf<String?>(null)
+    var fotoPredio2Url    by mutableStateOf<String?>(null)
     var fotoAcometidaUrl  by mutableStateOf<String?>(null)
     var fotoMedidorUrl    by mutableStateOf<String?>(null)
 
     var fotoPredioUriNueva    by mutableStateOf<Uri?>(null)
+    var fotoPredio2UriNueva   by mutableStateOf<Uri?>(null)
     var fotoAcometidaUriNueva by mutableStateOf<Uri?>(null)
     var fotoMedidorUriNueva   by mutableStateOf<Uri?>(null)
 
@@ -75,6 +81,17 @@ class EditarViewModel(
                 usuario         = predioLocal.usuario
                 direccion       = predioLocal.direccion ?: ""
                 estado          = predioLocal.estado
+
+                // Cargar fotos locales del predio
+                val fotosLocales = repository.getFotosLocal(getApplication(), predioId)
+                fotosLocales.forEach { foto ->
+                    when (foto.tipo) {
+                        "predio" -> fotoPredioUrl = "file://${foto.localPath}"
+                        "predio2" -> fotoPredio2Url = "file://${foto.localPath}"
+                        "acometida" -> fotoAcometidaUrl = "file://${foto.localPath}"
+                        "medidor" -> fotoMedidorUrl = "file://${foto.localPath}"
+                    }
+                }
                 isLoading = false
                 return@launch
             }
@@ -87,9 +104,12 @@ class EditarViewModel(
                     direccion       = predio.direccion ?: ""
                     estado          = predio.estado
                     repository.getFotosByPredio(predioId).onSuccess { fotos ->
+                        Log.d("EditarVM", "Fotos cargadas: ${fotos.map { it.tipo }.joinToString(", ")}")
                         fotoPredioUrl    = fotos.lastOrNull { it.tipo == "predio" }?.url
+                        fotoPredio2Url   = fotos.lastOrNull { it.tipo == "predio2" }?.url
                         fotoAcometidaUrl = fotos.lastOrNull { it.tipo == "acometida" }?.url
                         fotoMedidorUrl   = fotos.lastOrNull { it.tipo == "medidor" }?.url
+                        Log.d("EditarVM", "fotoPredio2Url = $fotoPredio2Url")
                     }
                     isLoading = false
                 }
@@ -103,6 +123,7 @@ class EditarViewModel(
     fun setFotoNueva(tipo: String, uri: Uri) {
         when (tipo) {
             "predio"    -> fotoPredioUriNueva    = uri
+            "predio2"   -> fotoPredio2UriNueva   = uri
             "acometida" -> fotoAcometidaUriNueva = uri
             "medidor"   -> fotoMedidorUriNueva   = uri
         }
@@ -128,27 +149,42 @@ class EditarViewModel(
                 )
             ).onSuccess {
                 val ctx = getApplication<Application>()
-                listOf(
+                Log.d("EditarVM", "Guardando fotos. fotoPredio2UriNueva = $fotoPredio2UriNueva")
+
+                val fotosASubir = listOf(
                     fotoPredioUriNueva    to "predio",
+                    fotoPredio2UriNueva   to "predio2",
                     fotoAcometidaUriNueva to "acometida",
                     fotoMedidorUriNueva   to "medidor"
-                ).forEach { (uri, tipo) ->
-                    if (uri != null) {
-                        repository.deleteFotosByPredioTipo(predioId, tipo)
+                ).mapNotNull { (uri, tipo) -> if (uri != null) uri to tipo else null }
 
-                        val uriParaSubir = if (tipo == "acometida") {
-                            procesarFotoAcometida(ctx, uri) ?: uri
-                        } else {
-                            uri
-                        }
+                coroutineScope {
+                    val uploadTasks = fotosASubir.map { (uri, tipo) ->
+                        async {
+                            Log.d("EditarVM", "Procesando foto tipo=$tipo, uri=$uri")
+                            Log.d("EditarVM", "Deletando fotos previas para tipo=$tipo")
+                            repository.deleteFotosByPredioTipo(predioId, tipo)
 
-                        repository.uploadFoto(ctx, uriParaSubir, predioId, tipo)
-                            .onSuccess { url ->
-                                repository.createFoto(
-                                    CreateFotoDto(predioId = predioId, tipo = tipo, url = url)
-                                )
+                            val uriParaSubir = if (tipo == "acometida") {
+                                procesarFotoAcometida(ctx, uri) ?: uri
+                            } else {
+                                uri
                             }
+
+                            Log.d("EditarVM", "Subiendo foto tipo=$tipo, uriParaSubir=$uriParaSubir")
+                            repository.uploadFoto(ctx, uriParaSubir, predioId, tipo)
+                                .onSuccess { url ->
+                                    Log.d("EditarVM", "Upload exitoso para tipo=$tipo, url=$url")
+                                    repository.createFoto(
+                                        CreateFotoDto(predioId = predioId, tipo = tipo, url = url)
+                                    )
+                                }
+                                .onFailure { e ->
+                                    Log.e("EditarVM", "Error al subir foto tipo=$tipo: ${e.message}")
+                                }
+                        }
                     }
+                    uploadTasks.awaitAll()
                 }
                 _saveState.value = EditarSaveState.Success
             }.onFailure { e ->

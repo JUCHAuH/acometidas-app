@@ -26,6 +26,10 @@ import com.jucha.acometidasapp.data.remote.SupabaseClient
 import com.jucha.acometidasapp.data.repository.PredioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -55,6 +59,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
 
     // Fotos capturadas (URIs locales del dispositivo)
     var fotoPredioUri     by mutableStateOf<Uri?>(null)
+    var fotoPredio2Uri    by mutableStateOf<Uri?>(null)
     var fotoAcometidaUri  by mutableStateOf<Uri?>(null)
     var fotoMedidorUri    by mutableStateOf<Uri?>(null)
 
@@ -68,6 +73,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     fun setFoto(tipo: String, uri: Uri) {
         when (tipo) {
             "predio"    -> fotoPredioUri    = uri
+            "predio2"   -> fotoPredio2Uri   = uri
             "acometida" -> fotoAcometidaUri = uri
             "medidor"   -> fotoMedidorUri   = uri
         }
@@ -83,16 +89,35 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        viewModelScope.launch {
-            // Detectar si hay internet
-            val isOnline = connectivityObserver.isConnected()
+        // Validar fotos requeridas según tipo de proyecto
+        val fotosRequeridas = when (ProyectoSesion.tipo) {
+            "agua_potable", "alcantarillado_autoayuda" ->
+                listOf(fotoPredioUri, fotoPredio2Uri, fotoAcometidaUri, fotoMedidorUri)
+            "alcantarillado_normal" ->
+                listOf(fotoPredioUri, fotoAcometidaUri, fotoMedidorUri)
+            else -> listOf(fotoPredioUri, fotoAcometidaUri, fotoMedidorUri)
+        }
 
-            if (isOnline) {
-                // Path ONLINE: guardar directamente en Supabase (original)
-                guardarOnline()
-            } else {
-                // Path OFFLINE: guardar localmente
-                guardarOffline()
+        if (fotosRequeridas.any { it == null }) {
+            val faltantes = when (ProyectoSesion.tipo) {
+                "agua_potable" -> "Vista del predio, Ubicación de acometida, Datos de acometida, Medidor"
+                "alcantarillado_autoayuda" -> "Vista del predio, Ubicación de acometida, Datos de acometida, Acometida"
+                else -> "Vista del predio, Datos de acometida, Acometida"
+            }
+            _saveState.value = NuevoSaveState.Error("Todas las fotos son obligatorias: $faltantes")
+            return
+        }
+
+        viewModelScope.launch {
+            // Detectar si hay internet usando el Flow (más confiable que isConnected())
+            connectivityObserver.isOnline.first().let { isOnline ->
+                if (isOnline) {
+                    // Path ONLINE: guardar directamente en Supabase (original)
+                    guardarOnline()
+                } else {
+                    // Path OFFLINE: guardar localmente
+                    guardarOffline()
+                }
             }
         }
     }
@@ -109,35 +134,40 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             )
         ).onSuccess { predio ->
             val ctx = getApplication<Application>()
-            listOf(
+            val fotosASubir = listOf(
                 fotoPredioUri    to "predio",
+                fotoPredio2Uri   to "predio2",
                 fotoAcometidaUri to "acometida",
                 fotoMedidorUri   to "medidor"
-            ).forEach { (uri, tipo) ->
-                if (uri != null) {
-                    Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
+            ).mapNotNull { (uri, tipo) -> if (uri != null) uri to tipo else null }
 
-                    val uriParaSubir = if (tipo == "acometida") {
-                        procesarFotoAcometida(ctx, uri) ?: uri
-                    } else {
-                        uri
-                    }
+            coroutineScope {
+                val uploadTasks = fotosASubir.map { (uri, tipo) ->
+                    async {
+                        Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
+                        val uriParaSubir = if (tipo == "acometida") {
+                            procesarFotoAcometida(ctx, uri) ?: uri
+                        } else {
+                            uri
+                        }
 
-                    repository.uploadFoto(ctx, uriParaSubir, predio.id, tipo)
-                        .onSuccess { url ->
-                            Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
-                            repository.createFoto(
-                                CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
-                            ).onSuccess {
-                                Log.d("NuevoVM", "createFoto OK tipo=$tipo")
-                            }.onFailure { e ->
-                                Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+                        repository.uploadFoto(ctx, uriParaSubir, predio.id, tipo)
+                            .onSuccess { url ->
+                                Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
+                                repository.createFoto(
+                                    CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
+                                ).onSuccess {
+                                    Log.d("NuevoVM", "createFoto OK tipo=$tipo")
+                                }.onFailure { e ->
+                                    Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+                                }
                             }
-                        }
-                        .onFailure { e ->
-                            Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}")
-                        }
+                            .onFailure { e ->
+                                Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}")
+                            }
+                    }
                 }
+                uploadTasks.awaitAll()
             }
             resetFormulario()
             _saveState.value = NuevoSaveState.Success
@@ -197,6 +227,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             // 4. Guardar fotos locales
             listOf(
                 fotoPredioUri    to "predio",
+                fotoPredio2Uri   to "predio2",
                 fotoAcometidaUri to "acometida",
                 fotoMedidorUri   to "medidor"
             ).forEach { (uri, tipo) ->
@@ -268,6 +299,7 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         usuario         = ""
         direccion       = ""
         fotoPredioUri    = null
+        fotoPredio2Uri   = null
         fotoAcometidaUri = null
         fotoMedidorUri   = null
     }
@@ -275,5 +307,5 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     val hasUnsavedChanges: Boolean
         get() = numeroContrato.isNotBlank() || codigoPredio.isNotBlank() ||
                 usuario.isNotBlank() || direccion.isNotBlank() ||
-                fotoPredioUri != null || fotoAcometidaUri != null || fotoMedidorUri != null
+                fotoPredioUri != null || fotoPredio2Uri != null || fotoAcometidaUri != null || fotoMedidorUri != null
 }

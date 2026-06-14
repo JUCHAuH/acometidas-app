@@ -41,6 +41,8 @@ fun ProyectosScreen(
     var mostrarDialogoCrear by remember { mutableStateOf(false) }
     var nombreNuevo         by remember { mutableStateOf("") }
     var tipoNuevo           by remember { mutableStateOf("agua_potable") }
+    var mostrarDialogoSubtipo by remember { mutableStateOf(false) }
+    var subtipoAlcantarillado by remember { mutableStateOf("normal") }
     var proyectoAEliminar   by remember { mutableStateOf<ProyectoDto?>(null) }
     var mostrarLogout       by remember { mutableStateOf(false) }
 
@@ -73,7 +75,7 @@ fun ProyectosScreen(
     // Crear proyecto (solo admin)
     if (mostrarDialogoCrear && isAdmin) {
         AlertDialog(
-            onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable" },
+            onDismissRequest = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable"; subtipoAlcantarillado = "normal" },
             title = { Text("Nuevo proyecto") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -97,7 +99,7 @@ fun ProyectosScreen(
                         )
                         FilterChip(
                             selected = tipoNuevo == "alcantarillado",
-                            onClick  = { tipoNuevo = "alcantarillado" },
+                            onClick  = { tipoNuevo = "alcantarillado"; mostrarDialogoSubtipo = true },
                             label    = { Text("Alcantarillado") },
                             colors   = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AzulAgua,
@@ -111,18 +113,57 @@ fun ProyectosScreen(
                 Button(
                     onClick = {
                         if (nombreNuevo.isNotBlank()) {
-                            vm.crearProyecto(nombreNuevo, tipoNuevo)
+                            val tipoFinal = if (tipoNuevo == "alcantarillado")
+                                "alcantarillado_$subtipoAlcantarillado" else tipoNuevo
+                            vm.crearProyecto(nombreNuevo, tipoFinal)
                             nombreNuevo = ""
                             tipoNuevo = "agua_potable"
+                            subtipoAlcantarillado = "normal"
                             mostrarDialogoCrear = false
                         }
                     }
                 ) { Text("Crear") }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable" }) {
+                TextButton(onClick = { mostrarDialogoCrear = false; nombreNuevo = ""; tipoNuevo = "agua_potable"; subtipoAlcantarillado = "normal" }) {
                     Text("Cancelar")
                 }
+            }
+        )
+    }
+
+    // Dialog para seleccionar subtipo de alcantarillado
+    if (mostrarDialogoSubtipo) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoSubtipo = false },
+            title = { Text("Tipo de alcantarillado") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("¿Cuál es el tipo de alcantarillado?", style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = subtipoAlcantarillado == "normal",
+                            onClick  = { subtipoAlcantarillado = "normal" },
+                            label    = { Text("Normal") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AzulAgua,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                        FilterChip(
+                            selected = subtipoAlcantarillado == "autoayuda",
+                            onClick  = { subtipoAlcantarillado = "autoayuda" },
+                            label    = { Text("Autoayuda") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AzulAgua,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { mostrarDialogoSubtipo = false }) { Text("Continuar") }
             }
         )
     }
@@ -300,7 +341,12 @@ private fun ProyectoItem(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text  = if (proyecto.tipo == "alcantarillado") "Alcantarillado" else "Agua Potable",
+                    text  = when {
+                        proyecto.tipo == "agua_potable" -> "Agua Potable"
+                        proyecto.tipo == "alcantarillado_normal" -> "Alcantarillado (Normal)"
+                        proyecto.tipo == "alcantarillado_autoayuda" -> "Alcantarillado (Autoayuda)"
+                        else -> proyecto.tipo
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
