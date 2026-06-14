@@ -1,4 +1,4 @@
-# Partes de Instalación Camacho
+# Partes de Instalación Empresa Proveedora
 
 Aplicación Android nativa para la gestión digital de **partes de instalación de acometidas** de agua potable y alcantarillado. Reemplaza el registro en papel del trabajo de campo, permitiendo capturar datos, fotografías y firmas de cada predio, y generar de forma automática los documentos oficiales en PDF/PNG listos para entrega.
 
@@ -136,14 +136,7 @@ Modos de exportación disponibles:
 1. Crea un proyecto en Supabase con las tablas descritas en [Modelo de datos](#modelo-de-datos).
 2. Crea un bucket de Storage llamado `acometidas` para almacenar las fotografías.
 3. Configura las funciones RPC `login` y `crear_usuario` (hash de contraseñas con `pgcrypto`).
-4. En `mobile/local.properties` (no versionado), agrega tus credenciales:
-
-```properties
-SUPABASE_URL=https://<tu-proyecto>.supabase.co
-SUPABASE_KEY=<tu-api-key>
-```
-
-Estas claves se inyectan automáticamente en `BuildConfig` durante la compilación.
+4. En `mobile/local.properties`, agrega tus credenciales:
 
 ### SDK de OpenCV
 
