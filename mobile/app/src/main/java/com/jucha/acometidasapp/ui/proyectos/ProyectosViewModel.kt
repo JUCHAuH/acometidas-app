@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jucha.acometidasapp.core.navigation.SesionUsuario
 import com.jucha.acometidasapp.data.local.AcometidasDatabase
+import com.jucha.acometidasapp.data.local.entity.ProyectoLocalEntity
 import com.jucha.acometidasapp.data.model.ProyectoDto
 import com.jucha.acometidasapp.data.remote.PredioApiService
 import com.jucha.acometidasapp.data.remote.ProyectoApiService
@@ -64,6 +65,16 @@ class ProyectosViewModel(application: Application) : AndroidViewModel(applicatio
                     repository.getProyectos()
                         .onSuccess { proyectosApi ->
                             Log.d("ProyectosVM", "Proyectos obtenidos de API: ${proyectosApi.size}")
+                            // Sincronizar Room: borrar proyectos que ya no existen en el servidor
+                            val apiIds = proyectosApi.map { it.id }.toSet()
+                            proyectosLocales.filter { it.id !in apiIds }.forEach {
+                                Log.d("ProyectosVM", "Borrando proyecto huérfano de Room: ${it.nombre}")
+                                proyectoDao.deleteProyectoById(it.id)
+                            }
+                            // Actualizar Room con datos actuales del servidor (nombre, tipo pueden haber cambiado)
+                            proyectosApi.forEach { dto ->
+                                proyectoDao.insertProyecto(ProyectoLocalEntity(id = dto.id, nombre = dto.nombre, tipo = dto.tipo))
+                            }
                             _uiState.value = ProyectosUiState.Success(proyectosApi)
                         }
                         .onFailure { e ->
@@ -91,6 +102,15 @@ class ProyectosViewModel(application: Application) : AndroidViewModel(applicatio
                             Log.d("ProyectosVM", "Asignaciones obtenidas de API: ${asignados.size}")
                             repository.getProyectos()
                                 .onSuccess { todos ->
+                                    // Sincronizar Room: borrar proyectos que ya no existen en el servidor
+                                    val todosIds = todos.map { it.id }.toSet()
+                                    proyectosLocales.filter { it.id !in todosIds }.forEach {
+                                        Log.d("ProyectosVM", "Borrando proyecto huérfano de Room: ${it.nombre}")
+                                        proyectoDao.deleteProyectoById(it.id)
+                                    }
+                                    todos.forEach { dto ->
+                                        proyectoDao.insertProyecto(ProyectoLocalEntity(id = dto.id, nombre = dto.nombre, tipo = dto.tipo))
+                                    }
                                     val filtradosApi = todos.filter { it.id in asignados }
                                     _uiState.value = ProyectosUiState.Success(filtradosApi)
                                 }
@@ -120,6 +140,14 @@ class ProyectosViewModel(application: Application) : AndroidViewModel(applicatio
             repository.createProyecto(nombre.trim(), tipo)
                 .onSuccess { cargarProyectos() }
                 .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al crear proyecto") }
+        }
+    }
+
+    fun renameProyecto(id: String, nuevoNombre: String) {
+        viewModelScope.launch {
+            repository.renameProyecto(id, nuevoNombre.trim())
+                .onSuccess { cargarProyectos() }
+                .onFailure { _uiState.value = ProyectosUiState.Error(it.message ?: "Error al renombrar proyecto") }
         }
     }
 

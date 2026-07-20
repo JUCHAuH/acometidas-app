@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Refresh
@@ -44,6 +45,8 @@ fun ProyectosScreen(
     var mostrarDialogoSubtipo by remember { mutableStateOf(false) }
     var subtipoAlcantarillado by remember { mutableStateOf("normal") }
     var proyectoAEliminar   by remember { mutableStateOf<ProyectoDto?>(null) }
+    var proyectoARenombrar  by remember { mutableStateOf<ProyectoDto?>(null) }
+    var nuevoNombreEdit     by remember { mutableStateOf("") }
     var mostrarLogout       by remember { mutableStateOf(false) }
 
     // Logout confirmation
@@ -164,6 +167,41 @@ fun ProyectosScreen(
             },
             confirmButton = {
                 Button(onClick = { mostrarDialogoSubtipo = false }) { Text("Continuar") }
+            }
+        )
+    }
+
+    // Renombrar proyecto (solo admin)
+    if (isAdmin) proyectoARenombrar?.let { proy ->
+        AlertDialog(
+            onDismissRequest = { proyectoARenombrar = null; nuevoNombreEdit = "" },
+            icon  = { Icon(Icons.Outlined.Edit, null, tint = AzulAgua) },
+            title = { Text("Renombrar proyecto") },
+            text  = {
+                OutlinedTextField(
+                    value         = nuevoNombreEdit,
+                    onValueChange = { nuevoNombreEdit = it },
+                    label         = { Text("Nombre del proyecto") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (nuevoNombreEdit.isNotBlank()) {
+                            vm.renameProyecto(proy.id, nuevoNombreEdit)
+                            proyectoARenombrar = null
+                            nuevoNombreEdit = ""
+                        }
+                    },
+                    enabled = nuevoNombreEdit.isNotBlank()
+                ) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { proyectoARenombrar = null; nuevoNombreEdit = "" }) {
+                    Text("Cancelar")
+                }
             }
         )
     }
@@ -298,7 +336,11 @@ fun ProyectosScreen(
                                     ProyectoSesion.tipo   = proyecto.tipo
                                     navController.navigate(Routes.MAIN)
                                 },
-                                onEliminar = { proyectoAEliminar = proyecto }
+                                onEliminar  = { proyectoAEliminar = proyecto },
+                                onRenombrar = {
+                                    nuevoNombreEdit = proyecto.nombre
+                                    proyectoARenombrar = proyecto
+                                }
                             )
                         }
                     }
@@ -314,7 +356,8 @@ private fun ProyectoItem(
     proyecto:      ProyectoDto,
     showDelete:    Boolean,
     onSeleccionar: () -> Unit,
-    onEliminar:    () -> Unit
+    onEliminar:    () -> Unit,
+    onRenombrar:   () -> Unit = {}
 ) {
     Card(
         onClick   = onSeleccionar,
@@ -352,6 +395,16 @@ private fun ProyectoItem(
                 )
             }
             if (showDelete) {
+                IconButton(
+                    onClick  = onRenombrar,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Edit, "Renombrar",
+                        modifier = Modifier.size(18.dp),
+                        tint     = AzulAgua
+                    )
+                }
                 IconButton(
                     onClick  = onEliminar,
                     modifier = Modifier.size(36.dp)

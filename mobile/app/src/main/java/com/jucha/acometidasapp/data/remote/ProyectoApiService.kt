@@ -20,4 +20,11 @@ interface ProyectoApiService {
     @DELETE("proyectos")
     @Headers("Prefer: return=minimal")
     suspend fun deleteProyecto(@Query("id") idFilter: String): Response<Void>
+
+    @PATCH("proyectos")
+    @Headers("Prefer: return=minimal")
+    suspend fun renameProyecto(
+        @Query("id")  idFilter: String,
+        @Body         body:     Map<String, String>
+    ): Response<Void>
 }

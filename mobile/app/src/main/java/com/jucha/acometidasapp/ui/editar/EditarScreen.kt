@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -260,30 +261,33 @@ fun EditarScreen(
                         // Para agua potable y alcantarillado autoayuda: 2 fotos grandes arriba
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FotoBoxEditar(
-                                uriNueva  = vm.fotoPredioUriNueva,
-                                urlActual = vm.fotoPredioUrl,
-                                label     = "VISTA DEL PREDIO",
-                                height    = 180.dp,
-                                onClick   = { pendingTipo = "predio"; mostrarDialogFoto = true },
-                                modifier  = Modifier.weight(1f)
+                                uriNueva    = vm.fotoPredioUriNueva,
+                                urlActual   = vm.fotoPredioUrl,
+                                label       = "VISTA DEL PREDIO",
+                                placeholder = "FOTO\nUSUARIO",
+                                height      = 180.dp,
+                                onCambiar   = { pendingTipo = "predio"; mostrarDialogFoto = true },
+                                modifier    = Modifier.weight(1f)
                             )
                             FotoBoxEditar(
-                                uriNueva  = vm.fotoPredio2UriNueva,
-                                urlActual = vm.fotoPredio2Url,
-                                label     = "UBICACIÓN DE LA ACOMETIDA",
-                                height    = 180.dp,
-                                onClick   = { pendingTipo = "predio2"; mostrarDialogFoto = true },
-                                modifier  = Modifier.weight(1f)
+                                uriNueva    = vm.fotoPredio2UriNueva,
+                                urlActual   = vm.fotoPredio2Url,
+                                label       = "UBICACIÓN DE LA ACOMETIDA",
+                                placeholder = "FOTO\nUSUARIO 2",
+                                height      = 180.dp,
+                                onCambiar   = { pendingTipo = "predio2"; mostrarDialogFoto = true },
+                                modifier    = Modifier.weight(1f)
                             )
                         }
                     } else {
                         // Para alcantarillado normal: 1 foto grande
                         FotoBoxEditar(
-                            uriNueva  = vm.fotoPredioUriNueva,
-                            urlActual = vm.fotoPredioUrl,
-                            label     = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
-                            height    = 220.dp,
-                            onClick   = { pendingTipo = "predio"; mostrarDialogFoto = true }
+                            uriNueva    = vm.fotoPredioUriNueva,
+                            urlActual   = vm.fotoPredioUrl,
+                            label       = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
+                            placeholder = "FOTO\nUSUARIO",
+                            height      = 220.dp,
+                            onCambiar   = { pendingTipo = "predio"; mostrarDialogFoto = true }
                         )
                     }
                 }
@@ -294,23 +298,25 @@ fun EditarScreen(
                 FormCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FotoBoxEditar(
-                            uriNueva  = vm.fotoAcometidaUriNueva,
-                            urlActual = vm.fotoAcometidaUrl,
-                            label     = "DATOS DE ACOMETIDA INSTALADA",
-                            height    = 180.dp,
-                            onClick   = { pendingTipo = "acometida"; mostrarDialogFoto = true },
-                            modifier  = Modifier.weight(1f)
+                            uriNueva    = vm.fotoAcometidaUriNueva,
+                            urlActual   = vm.fotoAcometidaUrl,
+                            label       = "DATOS DE ACOMETIDA INSTALADA",
+                            placeholder = "FOTO\nPIZARRA",
+                            height      = 180.dp,
+                            onCambiar   = { pendingTipo = "acometida"; mostrarDialogFoto = true },
+                            modifier    = Modifier.weight(1f)
                         )
                         FotoBoxEditar(
-                            uriNueva  = vm.fotoMedidorUriNueva,
-                            urlActual = vm.fotoMedidorUrl,
-                            label     = if (ProyectoSesion.tipo.startsWith("alcantarillado"))
-                                            "ACOMETIDA DE ALCANTARILLADO"
-                                        else
-                                            "MEDIDOR INSTALADO",
-                            height    = 180.dp,
-                            onClick   = { pendingTipo = "medidor"; mostrarDialogFoto = true },
-                            modifier  = Modifier.weight(1f)
+                            uriNueva    = vm.fotoMedidorUriNueva,
+                            urlActual   = vm.fotoMedidorUrl,
+                            label       = if (ProyectoSesion.tipo.startsWith("alcantarillado"))
+                                              "ACOMETIDA DE ALCANTARILLADO"
+                                          else
+                                              "MEDIDOR INSTALADO",
+                            placeholder = "FOTO\nACOMETIDA",
+                            height      = 180.dp,
+                            onCambiar   = { pendingTipo = "medidor"; mostrarDialogFoto = true },
+                            modifier    = Modifier.weight(1f)
                         )
                     }
                 }
@@ -348,14 +354,56 @@ private fun CampoForm(
 /** Muestra la foto nueva (URI local) si existe, sino la actual (URL remota), sino placeholder */
 @Composable
 private fun FotoBoxEditar(
-    uriNueva:  Uri?,
-    urlActual: String?,
-    label: String,
-    height: Dp,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    uriNueva:    Uri?,
+    urlActual:   String?,
+    label:       String,
+    placeholder: String,
+    height:      Dp,
+    onCambiar:   () -> Unit,
+    modifier:    Modifier = Modifier
 ) {
     val tieneImagen = uriNueva != null || urlActual != null
+    val modelVisor: Any? = uriNueva ?: urlActual
+    var mostrarVisor by remember { mutableStateOf(false) }
+
+    if (mostrarVisor && modelVisor != null) {
+        Dialog(
+            onDismissRequest = { mostrarVisor = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(0.95f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column {
+                    AsyncImage(
+                        model = modelVisor,
+                        contentDescription = label,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 520.dp)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { mostrarVisor = false },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Mantener") }
+                        Button(
+                            onClick = { mostrarVisor = false; onCambiar() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Cambiar") }
+                    }
+                }
+            }
+        }
+    }
+
     Column(modifier = modifier) {
         Box(
             modifier = Modifier
@@ -372,7 +420,7 @@ private fun FotoBoxEditar(
                     if (tieneImagen) Color.Transparent
                     else MaterialTheme.colorScheme.surfaceVariant
                 )
-                .clickable { onClick() },
+                .clickable { if (tieneImagen) mostrarVisor = true else onCambiar() },
             contentAlignment = Alignment.Center
         ) {
             when {
@@ -386,43 +434,23 @@ private fun FotoBoxEditar(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                else -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
                     Icon(
                         Icons.Outlined.AddAPhoto, null,
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.outline
+                        modifier = Modifier.size(40.dp),
+                        tint = AzulAgua
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
-                        "Toca para agregar foto",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        text = placeholder,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = AzulAgua,
+                        textAlign = TextAlign.Center
                     )
-                }
-            }
-            // Badge "Cambiar" si ya hay foto
-            if (tieneImagen) {
-                Surface(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Outlined.AddAPhoto, null,
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(3.dp))
-                        Text(
-                            "Cambiar",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
             }
         }

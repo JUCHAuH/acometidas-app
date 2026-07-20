@@ -18,4 +18,9 @@ class ProyectoRepository(private val api: ProyectoApiService) {
         val response = api.deleteProyecto("eq.$id")
         if (!response.isSuccessful) throw Exception("Error ${response.code()}")
     }
+
+    suspend fun renameProyecto(id: String, nuevoNombre: String): Result<Unit> = runCatching {
+        val response = api.renameProyecto("eq.$id", mapOf("nombre" to nuevoNombre))
+        if (!response.isSuccessful) throw Exception("Error ${response.code()}")
+    }
 }

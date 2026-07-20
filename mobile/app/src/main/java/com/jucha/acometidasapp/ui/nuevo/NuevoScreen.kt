@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -243,27 +244,30 @@ fun NuevoScreen(
                         // Para agua potable y alcantarillado autoayuda: 2 fotos grandes arriba
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FotoBox(
-                                uri    = vm.fotoPredioUri,
-                                label  = "VISTA DEL PREDIO",
-                                height = 180.dp,
-                                onClick = { pendingTipo = "predio"; mostrarDialogFoto = true },
-                                modifier = Modifier.weight(1f)
+                                uri         = vm.fotoPredioUri,
+                                label       = "VISTA DEL PREDIO",
+                                placeholder = "FOTO\nUSUARIO",
+                                height      = 180.dp,
+                                onCambiar   = { pendingTipo = "predio"; mostrarDialogFoto = true },
+                                modifier    = Modifier.weight(1f)
                             )
                             FotoBox(
-                                uri    = vm.fotoPredio2Uri,
-                                label  = "UBICACIÓN DE LA ACOMETIDA",
-                                height = 180.dp,
-                                onClick = { pendingTipo = "predio2"; mostrarDialogFoto = true },
-                                modifier = Modifier.weight(1f)
+                                uri         = vm.fotoPredio2Uri,
+                                label       = "UBICACIÓN DE LA ACOMETIDA",
+                                placeholder = "FOTO\nUSUARIO 2",
+                                height      = 180.dp,
+                                onCambiar   = { pendingTipo = "predio2"; mostrarDialogFoto = true },
+                                modifier    = Modifier.weight(1f)
                             )
                         }
                     } else {
                         // Para alcantarillado normal: 1 foto grande
                         FotoBox(
-                            uri    = vm.fotoPredioUri,
-                            label  = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
-                            height = 220.dp,
-                            onClick = { pendingTipo = "predio"; mostrarDialogFoto = true }
+                            uri         = vm.fotoPredioUri,
+                            label       = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",
+                            placeholder = "FOTO\nUSUARIO",
+                            height      = 220.dp,
+                            onCambiar   = { pendingTipo = "predio"; mostrarDialogFoto = true }
                         )
                     }
                 }
@@ -274,21 +278,23 @@ fun NuevoScreen(
                 FormCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         FotoBox(
-                            uri     = vm.fotoAcometidaUri,
-                            label   = "DATOS DE ACOMETIDA INSTALADA",
-                            height  = 180.dp,
-                            onClick = { pendingTipo = "acometida"; mostrarDialogFoto = true },
-                            modifier = Modifier.weight(1f)
+                            uri         = vm.fotoAcometidaUri,
+                            label       = "DATOS DE ACOMETIDA INSTALADA",
+                            placeholder = "FOTO\nPIZARRA",
+                            height      = 180.dp,
+                            onCambiar   = { pendingTipo = "acometida"; mostrarDialogFoto = true },
+                            modifier    = Modifier.weight(1f)
                         )
                         FotoBox(
-                            uri     = vm.fotoMedidorUri,
-                            label   = if (ProyectoSesion.tipo.startsWith("alcantarillado"))
-                                          "ACOMETIDA DE ALCANTARILLADO"
-                                      else
-                                          "MEDIDOR INSTALADO",
-                            height  = 180.dp,
-                            onClick = { pendingTipo = "medidor"; mostrarDialogFoto = true },
-                            modifier = Modifier.weight(1f)
+                            uri         = vm.fotoMedidorUri,
+                            label       = if (ProyectoSesion.tipo.startsWith("alcantarillado"))
+                                              "ACOMETIDA DE ALCANTARILLADO"
+                                          else
+                                              "MEDIDOR INSTALADO",
+                            placeholder = "FOTO\nACOMETIDA",
+                            height      = 180.dp,
+                            onCambiar   = { pendingTipo = "medidor"; mostrarDialogFoto = true },
+                            modifier    = Modifier.weight(1f)
                         )
                     }
                 }
@@ -332,10 +338,51 @@ private fun CampoForm(
 private fun FotoBox(
     uri: Uri?,
     label: String,
+    placeholder: String,
     height: Dp,
-    onClick: () -> Unit,
+    onCambiar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var mostrarVisor by remember { mutableStateOf(false) }
+
+    if (mostrarVisor && uri != null) {
+        Dialog(
+            onDismissRequest = { mostrarVisor = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(0.95f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = label,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 520.dp)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { mostrarVisor = false },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Mantener") }
+                        Button(
+                            onClick = { mostrarVisor = false; onCambiar() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Cambiar") }
+                    }
+                }
+            }
+        }
+    }
+
     Column(modifier = modifier) {
         Box(
             modifier = Modifier
@@ -352,7 +399,7 @@ private fun FotoBox(
                     if (uri != null) Color.Transparent
                     else MaterialTheme.colorScheme.surfaceVariant
                 )
-                .clickable { onClick() },
+                .clickable { if (uri != null) mostrarVisor = true else onCambiar() },
             contentAlignment = Alignment.Center
         ) {
             if (uri != null) {
@@ -363,18 +410,23 @@ private fun FotoBox(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.AddAPhoto,
                         contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.outline
+                        modifier = Modifier.size(40.dp),
+                        tint = AzulAgua
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
-                        "Toca para agregar foto",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        text = placeholder,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = AzulAgua,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
