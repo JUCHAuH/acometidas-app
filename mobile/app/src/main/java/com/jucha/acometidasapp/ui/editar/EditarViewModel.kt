@@ -54,6 +54,34 @@ class EditarViewModel(
     var direccion       by mutableStateOf("")
     var estado          by mutableStateOf("pendiente")
 
+    // Valores originales para detectar cambios
+    private var originalNumeroContrato = ""
+    private var originalCodigoPredio   = ""
+    private var originalUsuario        = ""
+    private var originalDireccion      = ""
+    private var originalEstado         = ""
+
+    private fun guardarOriginales() {
+        originalNumeroContrato = numeroContrato
+        originalCodigoPredio   = codigoPredio
+        originalUsuario        = usuario
+        originalDireccion      = direccion
+        originalEstado         = estado
+    }
+
+    val hasUnsavedChanges: Boolean
+        get() = !isLoading && (
+            numeroContrato != originalNumeroContrato ||
+            codigoPredio   != originalCodigoPredio   ||
+            usuario        != originalUsuario        ||
+            direccion      != originalDireccion      ||
+            estado         != originalEstado         ||
+            fotoPredioUriNueva    != null ||
+            fotoPredio2UriNueva   != null ||
+            fotoAcometidaUriNueva != null ||
+            fotoMedidorUriNueva   != null
+        )
+
     var fotoPredioUrl     by mutableStateOf<String?>(null)
     var fotoPredio2Url    by mutableStateOf<String?>(null)
     var fotoAcometidaUrl  by mutableStateOf<String?>(null)
@@ -92,6 +120,7 @@ class EditarViewModel(
                         "medidor" -> fotoMedidorUrl = "file://${foto.localPath}"
                     }
                 }
+                guardarOriginales()
                 isLoading = false
                 return@launch
             }
@@ -111,6 +140,7 @@ class EditarViewModel(
                         fotoMedidorUrl   = fotos.lastOrNull { it.tipo == "medidor" }?.url
                         Log.d("EditarVM", "fotoPredio2Url = $fotoPredio2Url")
                     }
+                    guardarOriginales()
                     isLoading = false
                 }
                 .onFailure { e ->
@@ -158,33 +188,39 @@ class EditarViewModel(
                     fotoMedidorUriNueva   to "medidor"
                 ).mapNotNull { (uri, tipo) -> if (uri != null) uri to tipo else null }
 
-                coroutineScope {
-                    val uploadTasks = fotosASubir.map { (uri, tipo) ->
-                        async {
-                            Log.d("EditarVM", "Procesando foto tipo=$tipo, uri=$uri")
-                            Log.d("EditarVM", "Deletando fotos previas para tipo=$tipo")
-                            repository.deleteFotosByPredioTipo(predioId, tipo)
+                try {
+                    coroutineScope {
+                        val uploadTasks = fotosASubir.map { (uri, tipo) ->
+                            async {
+                                try {
+                                    Log.d("EditarVM", "Procesando foto tipo=$tipo, uri=$uri")
+                                    repository.deleteFotosByPredioTipo(predioId, tipo)
 
-                            val uriParaSubir = if (tipo == "acometida") {
-                                procesarFotoAcometida(ctx, uri) ?: uri
-                            } else {
-                                uri
+                                    val uriParaSubir = if (tipo == "acometida") {
+                                        try { procesarFotoAcometida(ctx, uri) } catch (t: Throwable) { null } ?: uri
+                                    } else {
+                                        uri
+                                    }
+
+                                    repository.uploadFoto(ctx, uriParaSubir, predioId, tipo)
+                                        .onSuccess { url ->
+                                            Log.d("EditarVM", "Upload exitoso tipo=$tipo url=$url")
+                                            repository.createFoto(
+                                                CreateFotoDto(predioId = predioId, tipo = tipo, url = url)
+                                            )
+                                        }
+                                        .onFailure { e ->
+                                            Log.e("EditarVM", "Error subiendo foto tipo=$tipo: ${e.message}")
+                                        }
+                                } catch (t: Throwable) {
+                                    Log.e("EditarVM", "Error fatal foto tipo=$tipo: ${t.message}", t)
+                                }
                             }
-
-                            Log.d("EditarVM", "Subiendo foto tipo=$tipo, uriParaSubir=$uriParaSubir")
-                            repository.uploadFoto(ctx, uriParaSubir, predioId, tipo)
-                                .onSuccess { url ->
-                                    Log.d("EditarVM", "Upload exitoso para tipo=$tipo, url=$url")
-                                    repository.createFoto(
-                                        CreateFotoDto(predioId = predioId, tipo = tipo, url = url)
-                                    )
-                                }
-                                .onFailure { e ->
-                                    Log.e("EditarVM", "Error al subir foto tipo=$tipo: ${e.message}")
-                                }
                         }
+                        uploadTasks.awaitAll()
                     }
-                    uploadTasks.awaitAll()
+                } catch (t: Throwable) {
+                    Log.e("EditarVM", "Error fatal en bloque de fotos: ${t.message}", t)
                 }
                 _saveState.value = EditarSaveState.Success
             }.onFailure { e ->

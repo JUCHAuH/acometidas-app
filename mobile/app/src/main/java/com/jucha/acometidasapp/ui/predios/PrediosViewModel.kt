@@ -111,10 +111,22 @@ class PrediosViewModel(application: Application) : AndroidViewModel(application)
     fun eliminarPredio(id: String) {
         viewModelScope.launch {
             try {
-                // 1. Buscar el predio por ID o remoteId
                 val predioLocal = _prediosLocales.value.find { it.id == id || it.remoteId == id }
                 if (predioLocal == null) {
-                    Log.e("PrediosVM", "Predio no encontrado: $id")
+                    // Predio solo existe en el servidor (no en Room): borrar directo del servidor
+                    Log.d("PrediosVM", "Predio no encontrado en Room, eliminando del servidor: $id")
+                    if (_uiState.value is PrediosUiState.Success) {
+                        val estado = _uiState.value as PrediosUiState.Success
+                        _uiState.value = PrediosUiState.Success(
+                            estado.predios.filter { it.id != id },
+                            estado.prediosLocales
+                        )
+                    }
+                    repository.deleteStorageFilesForPredio(id)
+                    repository.deleteAllFotosByPredio(id)
+                    repository.deletePredio(id)
+                        .onSuccess { Log.d("PrediosVM", "Predio servidor eliminado: $id") }
+                        .onFailure { e -> Log.e("PrediosVM", "Error eliminando del servidor: ${e.message}") }
                     return@launch
                 }
 

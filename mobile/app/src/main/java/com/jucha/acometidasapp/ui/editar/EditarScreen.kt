@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
@@ -60,9 +61,14 @@ fun EditarScreen(
     val context   = LocalContext.current
     val saveState by vm.saveState.collectAsStateWithLifecycle()
 
-    var pendingUri        by remember { mutableStateOf<Uri?>(null) }
-    var pendingTipo       by remember { mutableStateOf("") }
-    var mostrarDialogFoto by remember { mutableStateOf(false) }
+    var pendingUri           by remember { mutableStateOf<Uri?>(null) }
+    var pendingTipo          by remember { mutableStateOf("") }
+    var mostrarDialogFoto    by remember { mutableStateOf(false) }
+    var mostrarDialogoAtras  by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = vm.hasUnsavedChanges) {
+        mostrarDialogoAtras = true
+    }
 
     val cameraLauncher = rememberLauncherForActivityResult(TakePicture()) { success ->
         if (success && pendingUri != null) {
@@ -126,7 +132,38 @@ fun EditarScreen(
         }
     }
 
-    // Dialogo éxito
+    if (mostrarDialogoAtras) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoAtras = false },
+            title = { Text("¿Desea guardar?", fontWeight = FontWeight.Bold) },
+            text  = { Text("Tiene cambios sin guardar en el formulario.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        mostrarDialogoAtras = false
+                        vm.guardar()
+                    },
+                    modifier = Modifier.fillMaxWidth(0.45f)
+                ) { Text("SÍ", fontWeight = FontWeight.ExtraBold) }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        mostrarDialogoAtras = false
+                        navController.popBackStack()
+                    },
+                    modifier = Modifier.fillMaxWidth(0.45f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.error
+                    )
+                ) { Text("NO", fontWeight = FontWeight.ExtraBold) }
+            }
+        )
+    }
+
     if (saveState is EditarSaveState.Success) {
         AlertDialog(
             onDismissRequest = { vm.resetSaveState(); navController.popBackStack() },
@@ -158,7 +195,10 @@ fun EditarScreen(
             TopAppBar(
                 title = { Text("Editar Predio", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (vm.hasUnsavedChanges) mostrarDialogoAtras = true
+                        else navController.popBackStack()
+                    }) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Volver")
                     }
                 },
@@ -257,8 +297,8 @@ fun EditarScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    if (ProyectoSesion.tipo == "agua_potable" || ProyectoSesion.tipo == "alcantarillado_autoayuda") {
-                        // Para agua potable y alcantarillado autoayuda: 2 fotos grandes arriba
+                    if (ProyectoSesion.tipo == "agua_potable") {
+                        // Para agua potable: 2 fotos grandes arriba
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FotoBoxEditar(
                                 uriNueva    = vm.fotoPredioUriNueva,
@@ -280,7 +320,7 @@ fun EditarScreen(
                             )
                         }
                     } else {
-                        // Para alcantarillado normal: 1 foto grande
+                        // Para alcantarillado (normal y autoayuda): 1 foto grande
                         FotoBoxEditar(
                             uriNueva    = vm.fotoPredioUriNueva,
                             urlActual   = vm.fotoPredioUrl,

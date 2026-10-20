@@ -1,5 +1,6 @@
 package com.jucha.acometidasapp.ui.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,11 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -60,7 +66,8 @@ fun MainScreen(navController: NavController) {
                          else allBottomNavItems.filter { it.route != Routes.Tab.EXPORTAR }
 
     val nuevoVm: NuevoViewModel = viewModel()
-    var pendingRoute by remember { mutableStateOf<String?>(null) }
+    var pendingRoute          by remember { mutableStateOf<String?>(null) }
+    var mostrarDialogoAtras   by remember { mutableStateOf(false) }
 
     // Conectividad
     val context = LocalContext.current
@@ -95,24 +102,94 @@ fun MainScreen(navController: NavController) {
         )
     }
 
+    // Diálogo al presionar botón físico de atrás con cambios sin guardar
+    if (mostrarDialogoAtras) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoAtras = false },
+            title = {
+                Text("¿Desea guardar?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Tiene cambios sin guardar en el formulario.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        mostrarDialogoAtras = false
+                        nuevoVm.guardar()
+                        innerNavController.navigate(Routes.Tab.PREDIOS) {
+                            popUpTo(innerNavController.graph.findStartDestination().id)
+                            launchSingleTop = true
+                        }
+                    },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(0.45f)
+                ) {
+                    Text("SÍ", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        mostrarDialogoAtras = false
+                        nuevoVm.resetFormulario()
+                        innerNavController.navigate(Routes.Tab.PREDIOS) {
+                            popUpTo(innerNavController.graph.findStartDestination().id)
+                            launchSingleTop = true
+                        }
+                    },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(0.45f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("NO", fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        )
+    }
+
+    // Diálogo al cambiar de pestaña con cambios sin guardar
     if (pendingRoute != null) {
         AlertDialog(
             onDismissRequest = { pendingRoute = null },
-            title = { Text("Cambios sin guardar") },
-            text  = { Text("Tensés cambios sin guardar en el formulario. ¿Descarás y seguís?") },
+            title = { Text("¿Desea guardar?", fontWeight = FontWeight.Bold) },
+            text  = { Text("Tiene cambios sin guardar en el formulario.") },
             confirmButton = {
-                TextButton(onClick = {
-                    nuevoVm.resetFormulario()
-                    innerNavController.navigate(pendingRoute!!) {
-                        popUpTo(innerNavController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState    = true
-                    }
-                    pendingRoute = null
-                }) { Text("Descartar") }
+                Button(
+                    onClick = {
+                        nuevoVm.guardar()
+                        innerNavController.navigate(pendingRoute!!) {
+                            popUpTo(innerNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState    = true
+                        }
+                        pendingRoute = null
+                    },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(0.45f)
+                ) { Text("SÍ", fontWeight = FontWeight.ExtraBold) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingRoute = null }) { Text("Cancelar") }
+                OutlinedButton(
+                    onClick = {
+                        nuevoVm.resetFormulario()
+                        innerNavController.navigate(pendingRoute!!) {
+                            popUpTo(innerNavController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState    = true
+                        }
+                        pendingRoute = null
+                    },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(0.45f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.error
+                    )
+                ) { Text("NO", fontWeight = FontWeight.ExtraBold) }
             }
         )
     }
@@ -163,6 +240,9 @@ fun MainScreen(navController: NavController) {
                         )
                     }
                     composable(Routes.Tab.NUEVO) {
+                        BackHandler(enabled = nuevoVm.hasUnsavedChanges) {
+                            mostrarDialogoAtras = true
+                        }
                         NuevoScreen(proyectoId = proyectoId, vm = nuevoVm)
                     }
                     composable(Routes.Tab.EXPORTAR) {

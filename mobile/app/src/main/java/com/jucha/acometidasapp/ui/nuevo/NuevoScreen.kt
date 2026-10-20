@@ -64,11 +64,29 @@ fun NuevoScreen(
     var pendingTipo       by remember { mutableStateOf("") }
     var mostrarDialogFoto by remember { mutableStateOf(false) }
 
+    // Para foto capturada pero no confirmada en la cámara
+    var fotoSinConfirmarUri  by remember { mutableStateOf<Uri?>(null) }
+    var fotoSinConfirmarTipo by remember { mutableStateOf("") }
+    var mostrarSalidaCamara  by remember { mutableStateOf(false) }
+
     val cameraLauncher = rememberLauncherForActivityResult(TakePicture()) { success ->
         if (success && pendingUri != null) {
             vm.setFoto(pendingTipo, pendingUri!!)
+            pendingUri = null
+        } else if (!success && pendingUri != null) {
+            // Verificar si el archivo temporal tiene contenido (foto capturada pero no confirmada)
+            val uri = pendingUri!!
+            val tieneContenido = try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize > 0L } == true
+            } catch (e: Exception) { false }
+
+            if (tieneContenido) {
+                fotoSinConfirmarUri  = uri
+                fotoSinConfirmarTipo = pendingTipo
+                mostrarSalidaCamara  = true
+            }
+            pendingUri = null
         }
-        pendingUri = null
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(GetContent()) { uri ->
@@ -127,6 +145,43 @@ fun NuevoScreen(
                 }
             }
         }
+    }
+
+    // Diálogo al salir de la cámara con foto capturada sin confirmar
+    if (mostrarSalidaCamara) {
+        AlertDialog(
+            onDismissRequest = {
+                fotoSinConfirmarUri  = null
+                mostrarSalidaCamara  = false
+            },
+            title = { Text("Imagen sin guardar", fontWeight = FontWeight.Bold) },
+            text  = { Text("Tienes una imagen sin guardar. ¿Deseas guardarla?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        fotoSinConfirmarUri?.let { vm.setFoto(fotoSinConfirmarTipo, it) }
+                        fotoSinConfirmarUri  = null
+                        mostrarSalidaCamara  = false
+                    },
+                    modifier = Modifier.fillMaxWidth(0.45f)
+                ) { Text("SÍ", fontWeight = FontWeight.ExtraBold) }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        fotoSinConfirmarUri  = null
+                        mostrarSalidaCamara  = false
+                    },
+                    modifier = Modifier.fillMaxWidth(0.45f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, MaterialTheme.colorScheme.error
+                    )
+                ) { Text("NO", fontWeight = FontWeight.ExtraBold) }
+            }
+        )
     }
 
     if (saveState is NuevoSaveState.Success) {
@@ -240,8 +295,8 @@ fun NuevoScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    if (ProyectoSesion.tipo == "agua_potable" || ProyectoSesion.tipo == "alcantarillado_autoayuda") {
-                        // Para agua potable y alcantarillado autoayuda: 2 fotos grandes arriba
+                    if (ProyectoSesion.tipo == "agua_potable") {
+                        // Para agua potable: 2 fotos grandes arriba
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FotoBox(
                                 uri         = vm.fotoPredioUri,
@@ -261,7 +316,7 @@ fun NuevoScreen(
                             )
                         }
                     } else {
-                        // Para alcantarillado normal: 1 foto grande
+                        // Para alcantarillado (normal y autoayuda): 1 foto grande
                         FotoBox(
                             uri         = vm.fotoPredioUri,
                             label       = "VISTA DEL PREDIO Y UBICACIÓN DE LA ACOMETIDA INSTALADA",

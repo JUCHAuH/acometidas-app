@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import android.graphics.Bitmap
 import androidx.core.content.FileProvider
+import com.jucha.acometidasapp.core.image.AcometidaPlaceholderProvider
 import com.jucha.acometidasapp.core.image.ImageProcessor
 import com.jucha.acometidasapp.core.sync.ConnectivityObserver
 import com.jucha.acometidasapp.core.sync.SyncManager
@@ -30,7 +31,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
@@ -57,14 +60,20 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     var usuario          by mutableStateOf("")
     var direccion        by mutableStateOf("")
 
-    // Fotos capturadas (URIs locales del dispositivo)
+    // Fotos capturadas 
     var fotoPredioUri     by mutableStateOf<Uri?>(null)
     var fotoPredio2Uri    by mutableStateOf<Uri?>(null)
     var fotoAcometidaUri  by mutableStateOf<Uri?>(null)
     var fotoMedidorUri    by mutableStateOf<Uri?>(null)
 
+    private var fotoMedidorEsPlaceholder by mutableStateOf(false)
+
     // Proyecto activo
     var proyectoId: String = ""
+        set(value) {
+            field = value
+            aplicarFotoAleatoriaSiCorresponde()
+        }
 
     // Estado de guardado
     private val _saveState = MutableStateFlow<NuevoSaveState>(NuevoSaveState.Idle)
@@ -75,7 +84,10 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
             "predio"    -> fotoPredioUri    = uri
             "predio2"   -> fotoPredio2Uri   = uri
             "acometida" -> fotoAcometidaUri = uri
-            "medidor"   -> fotoMedidorUri   = uri
+            "medidor"   -> {
+                fotoMedidorUri = uri
+                fotoMedidorEsPlaceholder = false
+            }
         }
     }
 
@@ -84,31 +96,16 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun guardar() {
-        if (codigoPredio.isBlank() || usuario.isBlank() || direccion.isBlank()) {
-            _saveState.value = NuevoSaveState.Error("Código Predio, Usuario y Dirección son obligatorios")
-            return
-        }
-
-        // Validar fotos requeridas según tipo de proyecto
-        val fotosRequeridas = when (ProyectoSesion.tipo) {
-            "agua_potable", "alcantarillado_autoayuda" ->
-                listOf(fotoPredioUri, fotoPredio2Uri, fotoAcometidaUri, fotoMedidorUri)
-            "alcantarillado_normal" ->
-                listOf(fotoPredioUri, fotoAcometidaUri, fotoMedidorUri)
-            else -> listOf(fotoPredioUri, fotoAcometidaUri, fotoMedidorUri)
-        }
-
-        if (fotosRequeridas.any { it == null }) {
-            val faltantes = when (ProyectoSesion.tipo) {
-                "agua_potable" -> "Vista del predio, Ubicación de acometida, Datos de acometida, Medidor"
-                "alcantarillado_autoayuda" -> "Vista del predio, Ubicación de acometida, Datos de acometida, Acometida"
-                else -> "Vista del predio, Datos de acometida, Acometida"
-            }
-            _saveState.value = NuevoSaveState.Error("Todas las fotos son obligatorias: $faltantes")
+        if (codigoPredio.isBlank() || usuario.isBlank()) {
+            _saveState.value = NuevoSaveState.Error("Código Predio y Usuario son obligatorios")
             return
         }
 
         viewModelScope.launch {
+            // Garantiza la foto de respaldo de alcantarillado ANTES de guardar, incluso si el
+            // usuario tocó "Guardar" más rápido de lo que tardó en copiarse en segundo plano.
+            asegurarFotoAlcantarilladoSiCorresponde()
+
             // Detectar si hay internet usando el Flow (más confiable que isConnected())
             connectivityObserver.isOnline.first().let { isOnline ->
                 if (isOnline) {
@@ -141,33 +138,40 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
                 fotoMedidorUri   to "medidor"
             ).mapNotNull { (uri, tipo) -> if (uri != null) uri to tipo else null }
 
-            coroutineScope {
-                val uploadTasks = fotosASubir.map { (uri, tipo) ->
-                    async {
-                        Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
-                        val uriParaSubir = if (tipo == "acometida") {
-                            procesarFotoAcometida(ctx, uri) ?: uri
-                        } else {
-                            uri
-                        }
-
-                        repository.uploadFoto(ctx, uriParaSubir, predio.id, tipo)
-                            .onSuccess { url ->
-                                Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
-                                repository.createFoto(
-                                    CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
-                                ).onSuccess {
-                                    Log.d("NuevoVM", "createFoto OK tipo=$tipo")
-                                }.onFailure { e ->
-                                    Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+            try {
+                coroutineScope {
+                    val uploadTasks = fotosASubir.map { (uri, tipo) ->
+                        async {
+                            try {
+                                Log.d("NuevoVM", "Subiendo foto tipo=$tipo uri=$uri")
+                                val uriParaSubir = if (tipo == "acometida") {
+                                    try { procesarFotoAcometida(ctx, uri) } catch (t: Throwable) { null } ?: uri
+                                } else {
+                                    uri
                                 }
+                                repository.uploadFoto(ctx, uriParaSubir, predio.id, tipo)
+                                    .onSuccess { url ->
+                                        Log.d("NuevoVM", "Upload OK tipo=$tipo url=$url")
+                                        repository.createFoto(
+                                            CreateFotoDto(predioId = predio.id, tipo = tipo, url = url)
+                                        ).onSuccess {
+                                            Log.d("NuevoVM", "createFoto OK tipo=$tipo")
+                                        }.onFailure { e ->
+                                            Log.e("NuevoVM", "createFoto FALLO tipo=$tipo: ${e.message}", e)
+                                        }
+                                    }
+                                    .onFailure { e ->
+                                        Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}")
+                                    }
+                            } catch (t: Throwable) {
+                                Log.e("NuevoVM", "Error fatal subiendo foto tipo=$tipo: ${t.message}", t)
                             }
-                            .onFailure { e ->
-                                Log.e("NuevoVM", "Upload FALLO tipo=$tipo: ${e.message}")
-                            }
+                        }
                     }
+                    uploadTasks.awaitAll()
                 }
-                uploadTasks.awaitAll()
+            } catch (t: Throwable) {
+                Log.e("NuevoVM", "Error fatal en bloque de subida de fotos: ${t.message}", t)
             }
             resetFormulario()
             _saveState.value = NuevoSaveState.Success
@@ -302,10 +306,36 @@ class NuevoViewModel(application: Application) : AndroidViewModel(application) {
         fotoPredio2Uri   = null
         fotoAcometidaUri = null
         fotoMedidorUri   = null
+        fotoMedidorEsPlaceholder = false
+        aplicarFotoAleatoriaSiCorresponde()
+    }
+
+    /**
+     * Para proyectos de alcantarillado (normal o autoayuda), precarga una foto
+     * aleatoria de acometida como respaldo si el campo está vacío. El usuario
+     * puede reemplazarla por la foto real tocando "Cambiar"; si ya hay una foto
+     * cargada, no se toca.
+     */
+    private fun aplicarFotoAleatoriaSiCorresponde() {
+        viewModelScope.launch { asegurarFotoAlcantarilladoSiCorresponde() }
+    }
+
+    private suspend fun asegurarFotoAlcantarilladoSiCorresponde() {
+        if (fotoMedidorUri != null) return
+        if (!ProyectoSesion.tipo.startsWith("alcantarillado")) return
+        val ctx = getApplication<Application>()
+        val uri = withContext(Dispatchers.IO) {
+            AcometidaPlaceholderProvider.obtenerAleatoria(ctx)
+        }
+        if (fotoMedidorUri == null) {
+            fotoMedidorUri = uri
+            fotoMedidorEsPlaceholder = uri != null
+        }
     }
 
     val hasUnsavedChanges: Boolean
         get() = numeroContrato.isNotBlank() || codigoPredio.isNotBlank() ||
                 usuario.isNotBlank() || direccion.isNotBlank() ||
-                fotoPredioUri != null || fotoPredio2Uri != null || fotoAcometidaUri != null || fotoMedidorUri != null
+                fotoPredioUri != null || fotoPredio2Uri != null || fotoAcometidaUri != null ||
+                (fotoMedidorUri != null && !fotoMedidorEsPlaceholder)
 }

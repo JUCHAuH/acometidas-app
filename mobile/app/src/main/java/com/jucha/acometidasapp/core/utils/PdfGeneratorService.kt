@@ -47,7 +47,7 @@ class PdfGeneratorService(private val context: Context) {
         val plantilla = when (tipoProyecto) {
             "agua_potable" -> "plantilla_acometida.pdf"
             "alcantarillado_normal" -> "plantilla_acometida_alcantarillado.pdf"
-            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_auto.pdf"
+            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_autov2.pdf"
             else -> "plantilla_acometida.pdf"
         }
         val stream = context.assets.open(plantilla)
@@ -67,7 +67,7 @@ class PdfGeneratorService(private val context: Context) {
         val plantilla = when (tipoProyecto) {
             "agua_potable" -> "plantilla_acometida.pdf"
             "alcantarillado_normal" -> "plantilla_acometida_alcantarillado.pdf"
-            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_auto.pdf"
+            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_autov2.pdf"
             else -> "plantilla_acometida.pdf"
         }
         val tempFiles = predios.map { predio ->
@@ -113,7 +113,7 @@ class PdfGeneratorService(private val context: Context) {
         val plantilla = when (tipoProyecto) {
             "agua_potable" -> "plantilla_acometida.pdf"
             "alcantarillado_normal" -> "plantilla_acometida_alcantarillado.pdf"
-            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_auto.pdf"
+            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_autov2.pdf"
             else -> "plantilla_acometida.pdf"
         }
         val doc = context.assets.open(plantilla).use { stream -> PDDocument.load(stream) }
@@ -141,7 +141,7 @@ class PdfGeneratorService(private val context: Context) {
         val plantilla = when (tipoProyecto) {
             "agua_potable" -> "plantilla_acometida.pdf"
             "alcantarillado_normal" -> "plantilla_acometida_alcantarillado.pdf"
-            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_auto.pdf"
+            "alcantarillado_autoayuda" -> "plantilla_acometida_alcantarillado_autov2.pdf"
             else -> "plantilla_acometida.pdf"
         }
         val nombreSanitizado = proyectoNombre.trim().replace(Regex("[^a-zA-Z0-9\\-]"), "_").replace(Regex("_+"), "_").trim('_')
@@ -264,11 +264,11 @@ class PdfGeneratorService(private val context: Context) {
             }
         }
         val r1 = readRect("foto_predio",    PdfCoords.FOTO1_X, PdfCoords.FOTO1_Y, PdfCoords.FOTO1_WIDTH, PdfCoords.FOTO1_HEIGHT)
-        val r1b = if (tipoProyecto == "agua_potable" || tipoProyecto == "alcantarillado_autoayuda")
+        val r1b = if (tipoProyecto == "agua_potable")
             readRect("foto_predio2", PdfCoords.FOTO1B_X, PdfCoords.FOTO1B_Y, PdfCoords.FOTO1B_WIDTH, PdfCoords.FOTO1B_HEIGHT)
             else floatArrayOf(0f, 0f, 0f, 0f)
         val r2 = readRect("foto_acometida", PdfCoords.FOTO2_X, PdfCoords.FOTO2_Y, PdfCoords.FOTO2_WIDTH, PdfCoords.FOTO2_HEIGHT)
-        val foto3Campo = if (tipoProyecto == "alcantarillado_normal") "foto_alcantarillado" else "foto_medidor"
+        val foto3Campo = if (tipoProyecto == "alcantarillado_normal" || tipoProyecto == "alcantarillado_autoayuda") "foto_alcantarillado" else "foto_medidor"
         val r3 = readRect(foto3Campo,       PdfCoords.FOTO3_X, PdfCoords.FOTO3_Y, PdfCoords.FOTO3_WIDTH, PdfCoords.FOTO3_HEIGHT)
 
         // Eliminar todos los widgets de la pagina 
@@ -314,7 +314,7 @@ class PdfGeneratorService(private val context: Context) {
 
         // Insertar fotos
         insertarFoto(doc, page, fotos, "predio",    r1[0], r1[1], r1[2], r1[3])
-        if (tipoProyecto == "agua_potable" || tipoProyecto == "alcantarillado_autoayuda") {
+        if (tipoProyecto == "agua_potable") {
             insertarFoto(doc, page, fotos, "predio2", r1b[0], r1b[1], r1b[2], r1b[3])
         }
         insertarFoto(doc, page, fotos, "acometida", r2[0], r2[1], r2[2], r2[3])
